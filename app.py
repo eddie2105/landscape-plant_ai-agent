@@ -1,3 +1,4 @@
+import json
 import os
 
 import gspread
@@ -59,12 +60,53 @@ MONTHS = {
 FINAL_REMINDER = "實際配置仍需依基地日照、土壤、排水、維護條件與設計風格確認。"
 
 SYSTEM_PROMPT = f"""你是一位景觀植栽知識助理。
-你只能根據提供的 Google Sheet 資料回答。
-不得使用外部知識，也不得捏造資料表中不存在的資訊。
-如果資料不足，請說明「目前資料表不足以判斷」，並指出缺少哪一類資訊。
-請使用台灣繁體中文回答。
-如果推薦或提及植物，請使用資料表中的 chinese_name 或 scientific_name。
-最終回答必須附上這句提醒：{FINAL_REMINDER}"""
+你只能根據提供的 Google Sheet 資料回答，不得使用外部知識，也不得捏造資料表中不存在的資訊。
+
+你的任務分成兩層：
+1. answer：用台灣繁體中文提供完整推薦說明，並且必須使用固定三段式格式。
+2. plant_ids：回傳 answer 中實際推薦、提到或比較的植物 plant_id，讓 Python 可以精準回查資料表與季相圖。
+
+嚴格規則：
+- answer 的所有植物資訊都必須來自提供的 Google Sheet。
+- 如果資料不足，請在 answer 說明「目前資料表不足以判斷」，並指出缺少哪一類資訊。
+- 如果推薦或提及植物，請使用資料表中的 chinese_name 或 scientific_name。
+- plant_ids 只能包含資料表中存在的 plant_id。
+- plant_id 必須是字串，並保留前導零，例如 "001"，不可改成 1。
+- 不可用中文名或學名代替 plant_id。
+- answer 不可出現 plant_id 或編號，例如 "001"、"002"；plant_id 只能放在 JSON 的 plant_ids 欄位。
+- 最終回答必須在 answer 內附上這句提醒：{FINAL_REMINDER}
+- 只能輸出 JSON，不要輸出 Markdown，不要使用 ```json code block，不要在 JSON 前後加任何說明。
+
+answer 必須使用以下段落格式，並保留換行：
+一、推薦植栽
+低層植栽：
+1. 中文名｜scientific_name
+
+中層植栽：
+1. 中文名｜scientific_name
+
+高層植栽：
+1. 中文名｜scientific_name
+
+如果某一層級在資料表中沒有合適植物，請在該層寫「目前資料表未找到合適選項」。
+
+二、判斷依據
+根據目前資料表，說明以上低層植栽、中層植栽、高層植栽符合哪些條件，例如日照、觀花、花色、葉色、季節表現、配置用途等。
+
+三、設計提醒
+{FINAL_REMINDER}
+
+JSON 格式必須完全符合：
+{{
+  "answer": "一、推薦植栽\\n低層植栽：\\n1. 中文名｜scientific_name\\n\\n中層植栽：\\n1. 中文名｜scientific_name\\n\\n高層植栽：\\n1. 中文名｜scientific_name\\n\\n二、判斷依據\\n根據目前資料表，以上低層植栽、中層植栽、高層植栽符合...\\n\\n三、設計提醒\\n實際配置仍需依基地日照、土壤、排水、維護條件與設計風格確認。",
+  "plant_ids": ["001", "002"]
+}}
+
+如果找不到合適植物，請回傳：
+{{
+  "answer": "一、推薦植栽\\n低層植栽：\\n目前資料表未找到合適選項\\n\\n中層植栽：\\n目前資料表未找到合適選項\\n\\n高層植栽：\\n目前資料表未找到合適選項\\n\\n二、判斷依據\\n缺少或不符合的條件是...\\n\\n三、設計提醒\\n{FINAL_REMINDER}",
+  "plant_ids": []
+}}"""
 
 RELATED_PLANT_COLUMNS = [
     "plant_id",
@@ -120,9 +162,43 @@ def build_context(plants_df, display_df):
     )
 
 
-def ask_ai(question, context, api_key, model):
+def parse_ai_json(raw_text):
+    text = _as_text(raw_text)
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                data = json.loads(cleaned[start : end + 1])
+            except json.JSONDecodeError:
+                data = None
+        else:
+            data = None
+
+    if not isinstance(data, dict):
+        return {"answer": text, "plant_ids": []}
+
+    plant_ids = data.get("plant_ids", [])
+    if not isinstance(plant_ids, list):
+        plant_ids = []
+
+    return {
+        "answer": _as_text(data.get("answer")),
+        "plant_ids": [
+            _as_text(plant_id)
+            for plant_id in plant_ids
+            if _as_text(plant_id)
+        ],
+    }
+
+
+def ask_ai(question, context, api_key, model, client=None):
     # 透過 prompt 規則限制 AI 只能根據提供的表格資料回答。
-    client = OpenAI(api_key=api_key)
+    client = client or OpenAI(api_key=api_key)
     response = client.responses.create(
         model=model,
         input=[
@@ -138,7 +214,7 @@ def ask_ai(question, context, api_key, model):
             },
         ],
     )
-    return response.output_text
+    return parse_ai_json(response.output_text)
 
 
 def find_missing_settings(settings):
@@ -170,6 +246,21 @@ def find_related_plants(answer, plants_df):
         )
 
     return plants_df.loc[matches].copy()
+
+
+def find_related_plants_by_ids(plant_ids, plants_df):
+    if not plant_ids:
+        return pd.DataFrame(columns=plants_df.columns)
+
+    clean_ids = {_as_text(plant_id) for plant_id in plant_ids if _as_text(plant_id)}
+    plants = plants_df.copy()
+    plants["plant_id"] = plants["plant_id"].astype(str).str.strip()
+
+    return plants[plants["plant_id"].isin(clean_ids)].copy()
+
+
+def hide_internal_id_columns(df):
+    return df.drop(columns=["plant_id"], errors="ignore")
 
 
 def _is_active(value):
@@ -286,7 +377,7 @@ def render_app():
             context = build_context(plants_df, display_df)
             try:
                 with st.spinner("AI 回答中..."):
-                    answer = ask_ai(
+                    ai_result = ask_ai(
                         question,
                         context,
                         settings["OPENAI_API_KEY"],
@@ -297,11 +388,25 @@ def render_app():
                 with st.expander("錯誤技術細節", expanded=False):
                     st.code(f"{type(exc).__module__}.{type(exc).__name__}: {exc}")
             else:
-                st.subheader("AI 回答")
-                st.write(answer)
+                answer = ai_result.get("answer", "")
+                plant_ids = ai_result.get("plant_ids", [])
 
-                related_plants = find_related_plants(answer, plants_df)
+                st.subheader("AI 回答")
+                st.markdown(answer)
+
+                related_plants = find_related_plants_by_ids(plant_ids, plants_df)
                 st.subheader("相關植栽資料")
+                matched_ids = set(related_plants["plant_id"].tolist()) if not related_plants.empty else set()
+                missing_ids = [
+                    plant_id
+                    for plant_id in plant_ids
+                    if plant_id not in matched_ids
+                ]
+                if missing_ids:
+                    st.warning(
+                        "AI 回傳的部分 plant_ids 在 plants 資料表中找不到："
+                        + ", ".join(missing_ids)
+                    )
                 if related_plants.empty:
                     st.info("未找到可對應的植栽資料。")
                 else:
@@ -311,19 +416,19 @@ def render_app():
                         if column in related_plants.columns
                     ]
                     st.dataframe(
-                        related_plants[visible_columns],
+                        hide_internal_id_columns(related_plants[visible_columns]),
                         hide_index=True,
                         use_container_width=True,
                     )
 
                 seasonal_matrix = build_seasonal_matrix(related_plants, display_df)
-                st.subheader("AI 提及植栽的季節矩陣")
+                st.subheader("AI 推薦植栽的季節矩陣")
                 st.caption("🌸 = 花期　🍃 = 葉色觀賞期　🌸🍃 = 同時有花期與葉色觀賞")
                 if seasonal_matrix.empty:
                     st.info("未找到可對應的季節矩陣資料。")
                 else:
                     st.dataframe(
-                        seasonal_matrix,
+                        hide_internal_id_columns(seasonal_matrix),
                         hide_index=True,
                         use_container_width=True,
                     )
