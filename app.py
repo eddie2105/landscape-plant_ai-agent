@@ -125,27 +125,25 @@ DASHBOARD_CSS = """
 <style>
     .stApp {
         background:
-            radial-gradient(circle at top left, rgba(155, 216, 111, 0.16), transparent 28rem),
-            linear-gradient(135deg, #0f1f1a 0%, #142820 52%, #1d332a 100%);
-        color: #f3f7ef;
+            radial-gradient(circle at top left, rgba(184, 199, 178, 0.16), transparent 28rem),
+            linear-gradient(135deg, #2f3d38 0%, #3f4f49 52%, #51635b 100%);
+        color: #f1f0ea;
     }
 
     .forest-header {
         background:
-            linear-gradient(120deg, rgba(29, 51, 42, 0.96), rgba(15, 31, 26, 0.72)),
-            url("https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=80");
-        background-position: center;
-        background-size: cover;
-        border: 1px solid rgba(155, 216, 111, 0.2);
+            linear-gradient(135deg, rgba(111, 129, 120, 0.96), rgba(81, 99, 91, 0.92)),
+            #6f8178;
+        border: 1px solid rgba(184, 199, 178, 0.26);
         border-radius: 8px;
-        box-shadow: 0 24px 60px rgba(3, 10, 7, 0.28);
+        box-shadow: 0 24px 60px rgba(37, 46, 42, 0.28);
         margin: 0.5rem 0 1.1rem;
         min-height: 13rem;
         padding: 2rem;
     }
 
     .forest-kicker {
-        color: #b7ec8a;
+        color: #d7ddcf;
         font-size: 0.78rem;
         font-weight: 800;
         letter-spacing: 0;
@@ -154,7 +152,7 @@ DASHBOARD_CSS = """
     }
 
     .forest-title {
-        color: #f3f7ef;
+        color: #f1f0ea;
         font-size: 2.5rem;
         font-weight: 900;
         letter-spacing: 0;
@@ -164,7 +162,7 @@ DASHBOARD_CSS = """
     }
 
     .forest-subtitle {
-        color: #d5e0cf;
+        color: #e0e1da;
         font-size: 1rem;
         line-height: 1.7;
         margin-top: 1rem;
@@ -172,17 +170,17 @@ DASHBOARD_CSS = """
     }
 
     .forest-card {
-        background: rgba(29, 51, 42, 0.92);
-        border: 1px solid rgba(155, 216, 111, 0.24);
+        background: rgba(81, 99, 91, 0.92);
+        border: 1px solid rgba(184, 199, 178, 0.24);
         border-radius: 8px;
-        box-shadow: 0 18px 40px rgba(3, 10, 7, 0.24);
-        color: #f3f7ef;
+        box-shadow: 0 18px 40px rgba(37, 46, 42, 0.24);
+        color: #f1f0ea;
         margin: 0.75rem 0;
         padding: 1rem 1.1rem;
     }
 
     .forest-card-title {
-        color: #9bd86f;
+        color: #d7ddcf;
         font-size: 0.9rem;
         font-weight: 700;
         letter-spacing: 0;
@@ -190,16 +188,16 @@ DASHBOARD_CSS = """
     }
 
     .forest-card-body {
-        color: #e5eddf;
+        color: #ecebe4;
         line-height: 1.65;
         white-space: pre-wrap;
     }
 
     .forest-section-title {
-        background: rgba(29, 51, 42, 0.92);
-        border: 1px solid rgba(155, 216, 111, 0.24);
+        background: rgba(81, 99, 91, 0.92);
+        border: 1px solid rgba(184, 199, 178, 0.24);
         border-radius: 8px;
-        color: #9bd86f;
+        color: #d7ddcf;
         font-size: 0.9rem;
         font-weight: 800;
         letter-spacing: 0;
@@ -208,15 +206,15 @@ DASHBOARD_CSS = """
     }
 
     .forest-metric {
-        background: rgba(15, 31, 26, 0.88);
-        border: 1px solid rgba(155, 216, 111, 0.28);
+        background: rgba(47, 61, 56, 0.9);
+        border: 1px solid rgba(184, 199, 178, 0.28);
         border-radius: 8px;
         min-height: 5.5rem;
         padding: 0.85rem 1rem;
     }
 
     .forest-metric-label {
-        color: #b7c8b0;
+        color: #c8d0c4;
         font-size: 0.82rem;
         font-weight: 600;
         letter-spacing: 0;
@@ -224,7 +222,7 @@ DASHBOARD_CSS = """
     }
 
     .forest-metric-value {
-        color: #9bd86f;
+        color: #d7ddcf;
         font-size: 1.35rem;
         font-weight: 800;
         line-height: 1.2;
@@ -232,33 +230,33 @@ DASHBOARD_CSS = """
     }
 
     div[data-testid="stTextArea"] textarea {
-        background: rgba(15, 31, 26, 0.86);
-        border-color: rgba(155, 216, 111, 0.42);
-        color: #f3f7ef;
+        background: rgba(47, 61, 56, 0.86);
+        border-color: rgba(184, 199, 178, 0.42);
+        color: #f1f0ea;
     }
 
     div[data-testid="stTextArea"] textarea:focus {
-        border-color: #9bd86f;
-        box-shadow: 0 0 0 1px #9bd86f;
+        border-color: #b8c7b2;
+        box-shadow: 0 0 0 1px #b8c7b2;
     }
 
     .stButton > button[kind="primary"] {
-        background: #9bd86f;
-        border-color: #9bd86f;
-        color: #0f1f1a;
+        background: #b8c7b2;
+        border-color: #b8c7b2;
+        color: #2f3d38;
         font-weight: 800;
     }
 
     .stButton > button[kind="primary"]:hover {
-        background: #b7ec8a;
-        border-color: #b7ec8a;
-        color: #0f1f1a;
+        background: #d7ddcf;
+        border-color: #d7ddcf;
+        color: #2f3d38;
     }
 
     div[data-testid="stDataFrame"],
     div[data-testid="stDataFrameResizable"] {
-        background: rgba(15, 31, 26, 0.72);
-        border: 1px solid rgba(155, 216, 111, 0.18);
+        background: rgba(47, 61, 56, 0.72);
+        border: 1px solid rgba(184, 199, 178, 0.18);
         border-radius: 8px;
         overflow: hidden;
     }

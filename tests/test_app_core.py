@@ -22,12 +22,13 @@ from app import (
 
 class AppCoreTests(unittest.TestCase):
     def test_dashboard_css_uses_forest_palette_and_card_classes(self):
-        self.assertIn("#0f1f1a", DASHBOARD_CSS)
-        self.assertIn("#1d332a", DASHBOARD_CSS)
-        self.assertIn("#9bd86f", DASHBOARD_CSS)
+        self.assertIn("#2f3d38", DASHBOARD_CSS)
+        self.assertIn("#51635b", DASHBOARD_CSS)
+        self.assertIn("#b8c7b2", DASHBOARD_CSS)
         self.assertIn(".forest-header", DASHBOARD_CSS)
         self.assertIn(".forest-card", DASHBOARD_CSS)
         self.assertIn(".forest-metric", DASHBOARD_CSS)
+        self.assertNotIn("images.unsplash.com", DASHBOARD_CSS)
 
     def test_dashboard_card_escapes_content_and_adds_title(self):
         html = dashboard_card("AI 回答", "<script>alert('x')</script>")
