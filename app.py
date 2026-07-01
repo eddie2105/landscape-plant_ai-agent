@@ -1,5 +1,6 @@
 import json
 import os
+from html import escape
 
 import gspread
 import pandas as pd
@@ -119,6 +120,176 @@ RELATED_PLANT_COLUMNS = [
     "display_type",
     "flower_impact",
 ]
+
+DASHBOARD_CSS = """
+<style>
+    .stApp {
+        background:
+            radial-gradient(circle at top left, rgba(155, 216, 111, 0.16), transparent 28rem),
+            linear-gradient(135deg, #0f1f1a 0%, #142820 52%, #1d332a 100%);
+        color: #f3f7ef;
+    }
+
+    .forest-header {
+        background:
+            linear-gradient(120deg, rgba(29, 51, 42, 0.96), rgba(15, 31, 26, 0.72)),
+            url("https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=80");
+        background-position: center;
+        background-size: cover;
+        border: 1px solid rgba(155, 216, 111, 0.2);
+        border-radius: 8px;
+        box-shadow: 0 24px 60px rgba(3, 10, 7, 0.28);
+        margin: 0.5rem 0 1.1rem;
+        min-height: 13rem;
+        padding: 2rem;
+    }
+
+    .forest-kicker {
+        color: #b7ec8a;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .forest-title {
+        color: #f3f7ef;
+        font-size: 2.5rem;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1.12;
+        margin: 0;
+        max-width: 56rem;
+    }
+
+    .forest-subtitle {
+        color: #d5e0cf;
+        font-size: 1rem;
+        line-height: 1.7;
+        margin-top: 1rem;
+        max-width: 42rem;
+    }
+
+    .forest-card {
+        background: rgba(29, 51, 42, 0.92);
+        border: 1px solid rgba(155, 216, 111, 0.24);
+        border-radius: 8px;
+        box-shadow: 0 18px 40px rgba(3, 10, 7, 0.24);
+        color: #f3f7ef;
+        margin: 0.75rem 0;
+        padding: 1rem 1.1rem;
+    }
+
+    .forest-card-title {
+        color: #9bd86f;
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        margin-bottom: 0.45rem;
+    }
+
+    .forest-card-body {
+        color: #e5eddf;
+        line-height: 1.65;
+        white-space: pre-wrap;
+    }
+
+    .forest-section-title {
+        background: rgba(29, 51, 42, 0.92);
+        border: 1px solid rgba(155, 216, 111, 0.24);
+        border-radius: 8px;
+        color: #9bd86f;
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        margin: 0.85rem 0 0.45rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .forest-metric {
+        background: rgba(15, 31, 26, 0.88);
+        border: 1px solid rgba(155, 216, 111, 0.28);
+        border-radius: 8px;
+        min-height: 5.5rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .forest-metric-label {
+        color: #b7c8b0;
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        margin-bottom: 0.35rem;
+    }
+
+    .forest-metric-value {
+        color: #9bd86f;
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    div[data-testid="stTextArea"] textarea {
+        background: rgba(15, 31, 26, 0.86);
+        border-color: rgba(155, 216, 111, 0.42);
+        color: #f3f7ef;
+    }
+
+    div[data-testid="stTextArea"] textarea:focus {
+        border-color: #9bd86f;
+        box-shadow: 0 0 0 1px #9bd86f;
+    }
+
+    .stButton > button[kind="primary"] {
+        background: #9bd86f;
+        border-color: #9bd86f;
+        color: #0f1f1a;
+        font-weight: 800;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background: #b7ec8a;
+        border-color: #b7ec8a;
+        color: #0f1f1a;
+    }
+
+    div[data-testid="stDataFrame"],
+    div[data-testid="stDataFrameResizable"] {
+        background: rgba(15, 31, 26, 0.72);
+        border: 1px solid rgba(155, 216, 111, 0.18);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+</style>
+"""
+
+
+def inject_dashboard_css():
+    st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
+
+
+def dashboard_card(title, body):
+    return (
+        '<div class="forest-card">'
+        f'<div class="forest-card-title">{escape(str(title))}</div>'
+        f'<div class="forest-card-body">{escape(str(body))}</div>'
+        '</div>'
+    )
+
+
+def metric_card(label, value):
+    return (
+        '<div class="forest-metric">'
+        f'<div class="forest-metric-label">{escape(str(label))}</div>'
+        f'<div class="forest-metric-value">{escape(str(value))}</div>'
+        '</div>'
+    )
+
+
+def dashboard_section_title(title):
+    return f'<div class="forest-section-title">{escape(str(title))}</div>'
 
 
 def load_settings():
@@ -322,14 +493,23 @@ def build_seasonal_matrix(plants_df, display_df):
 
 
 def render_app():
-    # Streamlit 單頁 MVP：提問、回答、相關植栽、季節矩陣與原始資料預覽。
+    # Streamlit 單頁 MVP：提問、回答、相關植栽、季節矩陣與資料預覽。
     st.set_page_config(
         page_title="Planting Knowledge Agent｜植栽知識 AI 助理",
         page_icon="🌿",
         layout="wide",
     )
-    st.title("Planting Knowledge Agent｜植栽知識 AI 助理")
-    st.caption("使用 Google Sheets 作為資料來源，讓 AI 依據植栽資料回答景觀設計問題。")
+    inject_dashboard_css()
+    st.markdown(
+        """
+        <section class="forest-header">
+            <div class="forest-kicker">Google Sheets Grounded Plant Agent</div>
+            <h1 class="forest-title">Planting Knowledge Agent｜植栽知識 AI 助理</h1>
+            <div class="forest-subtitle">使用 Google Sheets 作為資料來源，讓 AI 依據植栽資料回答景觀設計問題。</div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
     settings = load_settings()
     missing_settings = find_missing_settings(settings)
@@ -349,95 +529,121 @@ def render_app():
             settings["GOOGLE_SERVICE_ACCOUNT_FILE"],
         )
     except gspread.exceptions.WorksheetNotFound:
-        st.error("找不到指定的 worksheet，請檢查 WORKSHEET_NAME 是否與 Google Sheet 分頁名稱一致。")
+        st.error("找不到指定的 worksheet，請確認 WORKSHEET_NAME 是否存在於 Google Sheet。")
         return
     except Exception as exc:
-        st.error("Google Sheet 讀取失敗，請檢查 spreadsheet id、worksheet name，以及 service account 權限。")
+        st.error("Google Sheet 讀取失敗，請確認 spreadsheet id、worksheet name，以及 service account 設定。")
         with st.expander("錯誤技術細節", expanded=False):
             st.code(f"{type(exc).__module__}.{type(exc).__name__}: {exc}")
         return
 
     metric_columns = st.columns(4)
-    metric_columns[0].metric("植栽筆數", len(plants_df))
-    metric_columns[1].metric("display_matrix 筆數", len(display_df))
-    metric_columns[2].metric("OpenAI model", settings["OPENAI_MODEL"])
-    metric_columns[3].metric("資料來源", "Google Sheets API")
+    metric_columns[0].markdown(metric_card("植栽筆數", len(plants_df)), unsafe_allow_html=True)
+    metric_columns[1].markdown(metric_card("display_matrix 筆數", len(display_df)), unsafe_allow_html=True)
+    metric_columns[2].markdown(metric_card("OpenAI model", settings["OPENAI_MODEL"]), unsafe_allow_html=True)
+    metric_columns[3].markdown(metric_card("資料來源", "Google Sheets API"), unsafe_allow_html=True)
 
-    question = st.text_area(
-        "請輸入你的植栽問題：",
-        placeholder="例如：請推薦適合半日照且有季節觀賞性的植栽。",
-        height=140,
-    )
-    ask_clicked = st.button("詢問 AI", type="primary")
+    control_col, result_col = st.columns([0.34, 0.66], gap="large")
 
-    if ask_clicked:
-        if not question.strip():
-            st.warning("請先輸入問題。")
-        else:
-            context = build_context(plants_df, display_df)
-            try:
-                with st.spinner("AI 回答中..."):
-                    ai_result = ask_ai(
-                        question,
-                        context,
-                        settings["OPENAI_API_KEY"],
-                        settings["OPENAI_MODEL"],
-                    )
-            except Exception as exc:
-                st.error("OpenAI API 呼叫失敗，請檢查 OPENAI_API_KEY 或 OPENAI_MODEL 設定。")
-                with st.expander("錯誤技術細節", expanded=False):
-                    st.code(f"{type(exc).__module__}.{type(exc).__name__}: {exc}")
+    with control_col:
+        st.markdown(
+            dashboard_card(
+                "提問控制台",
+                "AI 會根據 Google Sheet 裡的 plants 與 display_matrix 回答。",
+            ),
+            unsafe_allow_html=True,
+        )
+        question = st.text_area(
+            "請輸入植栽或景觀設計問題",
+            placeholder="例如：請推薦適合半日照、四季有觀賞效果的植栽。",
+            height=180,
+        )
+        ask_clicked = st.button("詢問 AI", type="primary", use_container_width=True)
+        st.markdown(
+            dashboard_card(
+                "資料狀態",
+                f"目前模型：{settings['OPENAI_MODEL']}｜資料來源：Google Sheets API",
+            ),
+            unsafe_allow_html=True,
+        )
+
+    with result_col:
+        if ask_clicked:
+            if not question.strip():
+                st.warning("請先輸入問題。")
             else:
-                answer = ai_result.get("answer", "")
-                plant_ids = ai_result.get("plant_ids", [])
-
-                st.subheader("AI 回答")
-                st.markdown(answer)
-
-                related_plants = find_related_plants_by_ids(plant_ids, plants_df)
-                st.subheader("相關植栽資料")
-                matched_ids = set(related_plants["plant_id"].tolist()) if not related_plants.empty else set()
-                missing_ids = [
-                    plant_id
-                    for plant_id in plant_ids
-                    if plant_id not in matched_ids
-                ]
-                if missing_ids:
-                    st.warning(
-                        "AI 回傳的部分 plant_ids 在 plants 資料表中找不到："
-                        + ", ".join(missing_ids)
-                    )
-                if related_plants.empty:
-                    st.info("未找到可對應的植栽資料。")
+                context = build_context(plants_df, display_df)
+                try:
+                    with st.spinner("AI 回答中..."):
+                        ai_result = ask_ai(
+                            question,
+                            context,
+                            settings["OPENAI_API_KEY"],
+                            settings["OPENAI_MODEL"],
+                        )
+                except Exception as exc:
+                    st.error("OpenAI API 呼叫失敗，請確認 OPENAI_API_KEY 與 OPENAI_MODEL 設定。")
+                    with st.expander("錯誤技術細節", expanded=False):
+                        st.code(f"{type(exc).__module__}.{type(exc).__name__}: {exc}")
                 else:
-                    visible_columns = [
-                        column
-                        for column in RELATED_PLANT_COLUMNS
-                        if column in related_plants.columns
+                    answer = ai_result.get("answer", "")
+                    plant_ids = ai_result.get("plant_ids", [])
+
+                    st.markdown(dashboard_section_title("AI 回答"), unsafe_allow_html=True)
+                    st.markdown(answer)
+
+                    related_plants = find_related_plants_by_ids(plant_ids, plants_df)
+                    st.markdown(dashboard_section_title("相關植栽資料"), unsafe_allow_html=True)
+                    matched_ids = set(related_plants["plant_id"].tolist()) if not related_plants.empty else set()
+                    missing_ids = [
+                        plant_id
+                        for plant_id in plant_ids
+                        if plant_id not in matched_ids
                     ]
-                    st.dataframe(
-                        hide_internal_id_columns(related_plants[visible_columns]),
-                        hide_index=True,
-                        use_container_width=True,
-                    )
+                    if missing_ids:
+                        st.warning(
+                            "AI 回傳的部分 plant_ids 在 plants 資料中找不到："
+                            + ", ".join(missing_ids)
+                        )
+                    if related_plants.empty:
+                        st.info("沒有找到可對應的相關植栽資料。")
+                    else:
+                        visible_columns = [
+                            column
+                            for column in RELATED_PLANT_COLUMNS
+                            if column in related_plants.columns
+                        ]
+                        st.dataframe(
+                            hide_internal_id_columns(related_plants[visible_columns]),
+                            hide_index=True,
+                            use_container_width=True,
+                        )
 
-                seasonal_matrix = build_seasonal_matrix(related_plants, display_df)
-                st.subheader("AI 推薦植栽的季節矩陣")
-                st.caption("🌸 = 花期　🍃 = 葉色觀賞期　🌸🍃 = 同時有花期與葉色觀賞")
-                if seasonal_matrix.empty:
-                    st.info("未找到可對應的季節矩陣資料。")
-                else:
-                    st.dataframe(
-                        hide_internal_id_columns(seasonal_matrix),
-                        hide_index=True,
-                        use_container_width=True,
-                    )
+                    seasonal_matrix = build_seasonal_matrix(related_plants, display_df)
+                    st.markdown(dashboard_section_title("AI 推薦植栽的季節矩陣"), unsafe_allow_html=True)
+                    st.caption("🌸 = 花期　🍃 = 葉色觀賞期　🌸🍃 = 同時有花期與葉色觀賞")
+                    if seasonal_matrix.empty:
+                        st.info("沒有找到可對應的季節矩陣資料。")
+                    else:
+                        st.dataframe(
+                            hide_internal_id_columns(seasonal_matrix),
+                            hide_index=True,
+                            use_container_width=True,
+                        )
+        else:
+            st.markdown(
+                dashboard_card(
+                    "AI 回答",
+                    "輸入植栽或景觀設計問題後，這裡會顯示依據 Google Sheet 產生的回答。",
+                ),
+                unsafe_allow_html=True,
+            )
 
     with st.expander("Google Sheet 原始資料預覽", expanded=False):
         st.subheader("plants")
-        st.dataframe(plants_df, hide_index=True, use_container_width=True)
+        st.dataframe(hide_internal_id_columns(plants_df), hide_index=True, use_container_width=True)
         st.subheader("display_matrix")
-        st.dataframe(display_df, hide_index=True, use_container_width=True)
+        st.dataframe(hide_internal_id_columns(display_df), hide_index=True, use_container_width=True)
 
 
 if __name__ == "__main__":

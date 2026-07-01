@@ -3,20 +3,50 @@ import unittest
 import pandas as pd
 
 from app import (
+    DASHBOARD_CSS,
     REQUIRED_ENV_VARS,
     SYSTEM_PROMPT,
     ask_ai,
     build_context,
     build_seasonal_matrix,
+    dashboard_card,
+    dashboard_section_title,
     find_missing_settings,
     find_related_plants,
     find_related_plants_by_ids,
     hide_internal_id_columns,
+    metric_card,
     parse_ai_json,
 )
 
 
 class AppCoreTests(unittest.TestCase):
+    def test_dashboard_css_uses_forest_palette_and_card_classes(self):
+        self.assertIn("#0f1f1a", DASHBOARD_CSS)
+        self.assertIn("#1d332a", DASHBOARD_CSS)
+        self.assertIn("#9bd86f", DASHBOARD_CSS)
+        self.assertIn(".forest-header", DASHBOARD_CSS)
+        self.assertIn(".forest-card", DASHBOARD_CSS)
+        self.assertIn(".forest-metric", DASHBOARD_CSS)
+
+    def test_dashboard_card_escapes_content_and_adds_title(self):
+        html = dashboard_card("AI 回答", "<script>alert('x')</script>")
+        self.assertIn("AI 回答", html)
+        self.assertIn("&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;", html)
+        self.assertNotIn("<script>", html)
+        self.assertIn("forest-card", html)
+
+    def test_metric_card_escapes_value_and_label(self):
+        html = metric_card("資料來源", "<Google Sheets>")
+        self.assertIn("資料來源", html)
+        self.assertIn("&lt;Google Sheets&gt;", html)
+        self.assertIn("forest-metric", html)
+
+    def test_dashboard_section_title_escapes_content(self):
+        html = dashboard_section_title("<plants>")
+        self.assertIn("&lt;plants&gt;", html)
+        self.assertIn("forest-section-title", html)
+
     def test_build_context_includes_plants_and_display_matrix_csv_sections(self):
         plants_df = pd.DataFrame([{"plant_id": "001", "chinese_name": "春不老"}])
         display_df = pd.DataFrame([{"plant_id": "001", "flower_jan": 1, "leaf_jan": 0}])
