@@ -4,10 +4,13 @@ import pandas as pd
 
 from app import (
     DASHBOARD_CSS,
+    EXAMPLE_QUESTIONS,
     REQUIRED_ENV_VARS,
     SYSTEM_PROMPT,
     ask_ai,
     build_context,
+    build_coverage_analysis,
+    build_recommendation_summary,
     build_seasonal_matrix,
     dashboard_card,
     dashboard_section_title,
@@ -47,6 +50,17 @@ class AppCoreTests(unittest.TestCase):
         html = dashboard_section_title("<plants>")
         self.assertIn("&lt;plants&gt;", html)
         self.assertIn("forest-section-title", html)
+
+    def test_example_questions_are_demo_ready(self):
+        self.assertEqual(
+            [
+                "春季庭院低中高層植栽怎麼搭配？",
+                "我想找全日照、紅花、花感強的灌木",
+                "哪些植物適合做葉色觀賞？",
+                "請推薦 3 到 5 月有花期的植栽組合",
+            ],
+            EXAMPLE_QUESTIONS,
+        )
 
     def test_build_context_includes_plants_and_display_matrix_csv_sections(self):
         plants_df = pd.DataFrame([{"plant_id": "001", "chinese_name": "春不老"}])
@@ -256,6 +270,90 @@ class AppCoreTests(unittest.TestCase):
         self.assertEqual("🌸", matrix.loc[0, "1月"])
         self.assertEqual("🍃", matrix.loc[0, "2月"])
         self.assertEqual("🌸🍃", matrix.loc[0, "3月"])
+
+    def test_build_coverage_analysis_counts_monthly_flower_leaf_and_total(self):
+        plants_df = pd.DataFrame(
+            [
+                {"plant_id": "001", "chinese_name": "台灣欒樹"},
+                {"plant_id": "002", "chinese_name": "春不老"},
+            ]
+        )
+        display_df = pd.DataFrame(
+            [
+                {
+                    "plant_id": "001",
+                    "flower_jan": True,
+                    "leaf_jan": True,
+                    "flower_feb": False,
+                    "leaf_feb": True,
+                },
+                {
+                    "plant_id": "002",
+                    "flower_jan": True,
+                    "leaf_jan": False,
+                    "flower_feb": False,
+                    "leaf_feb": False,
+                },
+                {
+                    "plant_id": "999",
+                    "flower_jan": True,
+                    "leaf_jan": True,
+                    "flower_feb": True,
+                    "leaf_feb": True,
+                },
+            ]
+        )
+
+        analysis = build_coverage_analysis(plants_df, display_df)
+
+        jan_rows = analysis[analysis["月份"] == "1月"].set_index("指標")
+        feb_rows = analysis[analysis["月份"] == "2月"].set_index("指標")
+        mar_rows = analysis[analysis["月份"] == "3月"].set_index("指標")
+
+        self.assertEqual(2, jan_rows.loc["花期植物數", "植物數"])
+        self.assertEqual(1, jan_rows.loc["葉色觀賞植物數", "植物數"])
+        self.assertEqual(3, jan_rows.loc["花期＋葉色觀賞總數", "植物數"])
+        self.assertEqual(0, feb_rows.loc["花期植物數", "植物數"])
+        self.assertEqual(1, feb_rows.loc["葉色觀賞植物數", "植物數"])
+        self.assertEqual(1, feb_rows.loc["花期＋葉色觀賞總數", "植物數"])
+        self.assertEqual(0, mar_rows.loc["花期＋葉色觀賞總數", "植物數"])
+        self.assertEqual(36, len(analysis))
+
+    def test_build_recommendation_summary_counts_plant_types_and_peak_months(self):
+        plants_df = pd.DataFrame(
+            [
+                {"plant_id": "001", "plant_type": "草本"},
+                {"plant_id": "002", "plant_type": "灌木"},
+                {"plant_id": "003", "plant_type": "灌木"},
+                {"plant_id": "004", "plant_type": "喬木"},
+            ]
+        )
+        coverage_df = pd.DataFrame(
+            [
+                {"月份": "1月", "月份順序": 1, "指標": "花期＋葉色觀賞總數", "植物數": 2},
+                {"月份": "2月", "月份順序": 2, "指標": "花期＋葉色觀賞總數", "植物數": 5},
+                {"月份": "3月", "月份順序": 3, "指標": "花期＋葉色觀賞總數", "植物數": 5},
+                {"月份": "4月", "月份順序": 4, "指標": "花期植物數", "植物數": 6},
+            ]
+        )
+
+        summary = dict(build_recommendation_summary(plants_df, coverage_df))
+
+        self.assertEqual("4", summary["推薦植物數量"])
+        self.assertEqual("1", summary["草本"])
+        self.assertEqual("2", summary["灌木"])
+        self.assertEqual("1", summary["喬木"])
+        self.assertEqual("2月、3月", summary["主要觀賞月份"])
+        self.assertEqual("Google Sheets", summary["資料來源"])
+
+    def test_build_recommendation_summary_handles_missing_data(self):
+        summary = dict(build_recommendation_summary(pd.DataFrame(), pd.DataFrame()))
+
+        self.assertEqual("0", summary["推薦植物數量"])
+        self.assertEqual("0", summary["草本"])
+        self.assertEqual("0", summary["灌木"])
+        self.assertEqual("0", summary["喬木"])
+        self.assertEqual("無資料", summary["主要觀賞月份"])
 
 
 if __name__ == "__main__":

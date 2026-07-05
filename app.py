@@ -2,6 +2,7 @@ import json
 import os
 from html import escape
 
+import altair as alt
 import gspread
 import pandas as pd
 import streamlit as st
@@ -119,6 +120,13 @@ RELATED_PLANT_COLUMNS = [
     "leaf_color",
     "display_type",
     "flower_impact",
+]
+
+EXAMPLE_QUESTIONS = [
+    "春季庭院低中高層植栽怎麼搭配？",
+    "我想找全日照、紅花、花感強的灌木",
+    "哪些植物適合做葉色觀賞？",
+    "請推薦 3 到 5 月有花期的植栽組合",
 ]
 
 DASHBOARD_CSS = """
@@ -490,6 +498,111 @@ def build_seasonal_matrix(plants_df, display_df):
     return pd.DataFrame(rows, columns=["plant_id", "植物名稱", *MONTHS.values()])
 
 
+def build_coverage_analysis(plants_df, display_df):
+    # 計算本次推薦植栽在 1-12 月的花期與葉色觀賞覆蓋數量，不做分數評估。
+    if plants_df.empty or display_df.empty or "plant_id" not in display_df.columns:
+        plant_ids = set()
+    else:
+        plant_ids = {_as_text(plant_id) for plant_id in plants_df.get("plant_id", [])}
+
+    display_rows = display_df.copy()
+    if "plant_id" in display_rows.columns:
+        display_rows["plant_id"] = display_rows["plant_id"].map(_as_text)
+        display_rows = display_rows[display_rows["plant_id"].isin(plant_ids)]
+    else:
+        display_rows = pd.DataFrame()
+
+    rows = []
+    for month_index, (month_key, month_label) in enumerate(MONTHS.items(), start=1):
+        flower_count = 0
+        leaf_count = 0
+
+        for _, row in display_rows.iterrows():
+            if _is_active(row.get(f"flower_{month_key}")):
+                flower_count += 1
+            if _is_active(row.get(f"leaf_{month_key}")):
+                leaf_count += 1
+
+        coverage_values = {
+            "花期植物數": flower_count,
+            "葉色觀賞植物數": leaf_count,
+            "花期＋葉色觀賞總數": flower_count + leaf_count,
+        }
+        for metric, value in coverage_values.items():
+            rows.append(
+                {
+                    "月份": month_label,
+                    "月份順序": month_index,
+                    "指標": metric,
+                    "植物數": value,
+                }
+            )
+
+    return pd.DataFrame(rows, columns=["月份", "月份順序", "指標", "植物數"])
+
+
+def coverage_line_chart(coverage_df):
+    return (
+        alt.Chart(coverage_df)
+        .mark_line(point=True, strokeWidth=3)
+        .encode(
+            x=alt.X(
+                "月份:N",
+                sort=list(MONTHS.values()),
+                title="月份",
+            ),
+            y=alt.Y("植物數:Q", title="植物數"),
+            color=alt.Color(
+                "指標:N",
+                scale=alt.Scale(
+                    domain=["花期植物數", "葉色觀賞植物數", "花期＋葉色觀賞總數"],
+                    range=["#c6a26f", "#9fb3a2", "#d7ddcf"],
+                ),
+                title="分析指標",
+            ),
+            tooltip=[
+                alt.Tooltip("月份:N", title="月份"),
+                alt.Tooltip("指標:N", title="指標"),
+                alt.Tooltip("植物數:Q", title="植物數"),
+            ],
+        )
+        .properties(height=320)
+    )
+
+
+def build_recommendation_summary(plants_df, coverage_df):
+    # 摘要卡只使用 Google Sheet 回查到的推薦植栽與月份覆蓋分析結果。
+    type_counts = {"草本": 0, "灌木": 0, "喬木": 0}
+    if not plants_df.empty and "plant_type" in plants_df.columns:
+        for plant_type in plants_df["plant_type"]:
+            plant_type_text = _as_text(plant_type)
+            for type_name in type_counts:
+                if type_name in plant_type_text:
+                    type_counts[type_name] += 1
+                    break
+
+    peak_months = "無資料"
+    if not coverage_df.empty:
+        total_rows = coverage_df[
+            coverage_df["指標"] == "花期＋葉色觀賞總數"
+        ].copy()
+        if not total_rows.empty:
+            max_value = total_rows["植物數"].max()
+            if max_value > 0:
+                month_rows = total_rows[total_rows["植物數"] == max_value]
+                month_rows = month_rows.sort_values("月份順序").head(2)
+                peak_months = "、".join(month_rows["月份"].astype(str).tolist())
+
+    return [
+        ("推薦植物數量", str(len(plants_df))),
+        ("草本", str(type_counts["草本"])),
+        ("灌木", str(type_counts["灌木"])),
+        ("喬木", str(type_counts["喬木"])),
+        ("主要觀賞月份", peak_months),
+        ("資料來源", "Google Sheets"),
+    ]
+
+
 def render_app():
     # Streamlit 單頁 MVP：提問、回答、相關植栽、季節矩陣與資料預覽。
     st.set_page_config(
@@ -551,10 +664,20 @@ def render_app():
             ),
             unsafe_allow_html=True,
         )
+        st.markdown(dashboard_section_title("範例問題"), unsafe_allow_html=True)
+        for index, example_question in enumerate(EXAMPLE_QUESTIONS):
+            if st.button(
+                example_question,
+                key=f"example_question_{index}",
+                use_container_width=True,
+            ):
+                st.session_state["question"] = example_question
+
         question = st.text_area(
             "請輸入植栽或景觀設計問題",
             placeholder="例如：請推薦適合半日照、四季有觀賞效果的植栽。",
             height=180,
+            key="question",
         )
         ask_clicked = st.button("詢問 AI", type="primary", use_container_width=True)
         st.markdown(
@@ -591,6 +714,16 @@ def render_app():
                     st.markdown(answer)
 
                     related_plants = find_related_plants_by_ids(plant_ids, plants_df)
+                    coverage_analysis = build_coverage_analysis(related_plants, display_df)
+                    summary_items = build_recommendation_summary(related_plants, coverage_analysis)
+                    st.markdown(dashboard_section_title("本次推薦摘要"), unsafe_allow_html=True)
+                    summary_columns = st.columns(3)
+                    for index, (label, value) in enumerate(summary_items):
+                        summary_columns[index % 3].markdown(
+                            metric_card(label, value),
+                            unsafe_allow_html=True,
+                        )
+
                     st.markdown(dashboard_section_title("相關植栽資料"), unsafe_allow_html=True)
                     matched_ids = set(related_plants["plant_id"].tolist()) if not related_plants.empty else set()
                     missing_ids = [
@@ -614,6 +747,15 @@ def render_app():
                         st.dataframe(
                             hide_internal_id_columns(related_plants[visible_columns]),
                             hide_index=True,
+                            use_container_width=True,
+                        )
+
+                    st.markdown(dashboard_section_title("本次推薦植栽｜月份觀賞覆蓋分析"), unsafe_allow_html=True)
+                    if related_plants.empty:
+                        st.info("沒有可分析的推薦植栽。")
+                    else:
+                        st.altair_chart(
+                            coverage_line_chart(coverage_analysis),
                             use_container_width=True,
                         )
 
