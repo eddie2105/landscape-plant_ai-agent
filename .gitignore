@@ -27,6 +27,7 @@ dist/
 # Local app/runtime files
 .superpowers/
 .streamlit/secrets.toml
+data/
 *.log
 *.sqlite
 *.sqlite3
