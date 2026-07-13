@@ -1,0 +1,1427 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>互動式 DEF 流程圖</title>
+    <style>
+      :root {
+        --bg: #f5f4ef;
+        --ink: #24302d;
+        --muted: #63706b;
+        --panel: #ffffff;
+        --line: #d8d4c8;
+        --forest: #49675c;
+        --forest-dark: #2f3d38;
+        --sage: #dce5d7;
+        --amber: #d1a15f;
+        --clay: #b46f5b;
+        --blue: #5f7f9d;
+        --detail-width: 27rem;
+        --shadow: 0 16px 38px rgba(36, 48, 45, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(180deg, rgba(220, 229, 215, 0.52), transparent 22rem),
+          var(--bg);
+        color: var(--ink);
+        font-family: "Microsoft JhengHei", "Noto Sans TC", Arial, sans-serif;
+        line-height: 1.65;
+      }
+
+      header {
+        background: linear-gradient(135deg, var(--forest-dark), var(--forest));
+        color: #fffdf6;
+        padding: 2.25rem clamp(1rem, 4vw, 3rem);
+      }
+
+      header p {
+        color: #e6ebdf;
+        margin: 0.65rem 0 0;
+        max-width: 58rem;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.5rem);
+      }
+
+      main {
+        padding: 1.25rem clamp(1rem, 4vw, 3rem) 3rem;
+      }
+
+      .workspace {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+        align-items: start;
+      }
+
+      .panel {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        padding: 1rem;
+      }
+
+      .panel h2 {
+        color: var(--forest-dark);
+        font-size: 1.25rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .mind-map {
+        align-items: center;
+        display: grid;
+        gap: 1.1rem;
+        grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+      }
+
+      .mind-center {
+        align-items: center;
+        background: #fffdf8;
+        border: 4px solid var(--forest-dark);
+        border-radius: 8px;
+        box-shadow: 0 12px 26px rgba(36, 48, 45, 0.14);
+        color: var(--forest-dark);
+        display: flex;
+        font-size: 1.28rem;
+        font-weight: 900;
+        justify-content: center;
+        min-height: 13rem;
+        padding: 1rem;
+        text-align: center;
+        writing-mode: vertical-rl;
+      }
+
+      .mind-branches {
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .branch {
+        background: #fbfaf7;
+        border: 1px solid var(--line);
+        border-left: 10px solid var(--forest);
+        border-radius: 8px;
+        display: grid;
+        gap: 0.65rem;
+        grid-template-columns: minmax(9rem, 0.28fr) minmax(0, 1fr);
+        padding: 0.85rem;
+        position: relative;
+      }
+
+      .branch::before {
+        background: currentColor;
+        content: "";
+        height: 4px;
+        left: -2.25rem;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2.25rem;
+      }
+
+      .branch.setup {
+        color: #3f4f92;
+        border-left-color: #3f4f92;
+      }
+
+      .branch.source {
+        color: #2f7f73;
+        border-left-color: #2f7f73;
+      }
+
+      .branch.ai {
+        color: #c55b61;
+        border-left-color: #c55b61;
+      }
+
+      .branch.analysis {
+        color: #339769;
+        border-left-color: #339769;
+      }
+
+      .branch.ui {
+        color: #8a64b7;
+        border-left-color: #8a64b7;
+      }
+
+      .branch.checks {
+        color: #c5893c;
+        border-left-color: #c5893c;
+      }
+
+      .branch-title {
+        align-self: center;
+        border: 3px solid currentColor;
+        border-radius: 8px;
+        color: var(--ink);
+        font-size: 1.05rem;
+        font-weight: 900;
+        padding: 0.45rem 0.65rem;
+        text-align: center;
+      }
+
+      .branch-items {
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      .mind-note {
+        background: #eef7fb;
+        border: 2px dashed #32a9c8;
+        border-radius: 8px;
+        color: var(--ink);
+        padding: 0.7rem 0.85rem;
+      }
+
+      .brain-network {
+        background:
+          radial-gradient(circle at 18% 18%, rgba(47, 127, 115, 0.16), transparent 7rem),
+          radial-gradient(circle at 72% 42%, rgba(197, 91, 97, 0.14), transparent 8rem),
+          #f7fbf8;
+        border: 1px dashed #a9c7bd;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.86rem;
+        margin-bottom: 0.75rem;
+        padding: 0.7rem 0.85rem;
+      }
+
+      .leaf-node {
+        border-style: dashed;
+        position: relative;
+      }
+
+      .leaf-node::after {
+        background: currentColor;
+        border-radius: 999px;
+        content: "";
+        height: 0.42rem;
+        position: absolute;
+        right: -0.28rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0.42rem;
+      }
+
+      .lane-title {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+        margin-bottom: 0.65rem;
+        text-transform: uppercase;
+      }
+
+      .node-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+      }
+
+      .node {
+        appearance: none;
+        background: var(--panel);
+        border: 1px solid #c9d4c3;
+        border-radius: 8px;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        min-height: 2.65rem;
+        padding: 0.55rem 0.75rem;
+        text-align: left;
+        transition:
+          transform 140ms ease,
+          border-color 140ms ease,
+          background 140ms ease;
+      }
+
+      .node:hover,
+      .node:focus {
+        border-color: var(--forest);
+        outline: none;
+        transform: translateY(-1px);
+      }
+
+      .node.active {
+        background: var(--forest-dark);
+        border-color: var(--forest-dark);
+        color: #fffdf6;
+      }
+
+      .node.utility {
+        border-color: #d7c39d;
+      }
+
+      .node.analysis {
+        border-color: #adc5d8;
+      }
+
+      .node.check {
+        border-color: #d9b8ad;
+      }
+
+      .arrow {
+        color: var(--muted);
+        font-weight: 900;
+      }
+
+      .detail {
+        position: sticky;
+        top: 1rem;
+      }
+
+      .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0.75rem 0;
+      }
+
+      .tag {
+        background: var(--sage);
+        border-radius: 999px;
+        color: var(--forest-dark);
+        display: inline-flex;
+        font-size: 0.78rem;
+        font-weight: 800;
+        padding: 0.16rem 0.55rem;
+      }
+
+      .tag.amber {
+        background: #f1dfbc;
+      }
+
+      .tag.blue {
+        background: #d8e4ee;
+      }
+
+      .tag.clay {
+        background: #efd8d2;
+      }
+
+      dl {
+        display: grid;
+        gap: 0.55rem;
+        margin: 0.8rem 0 0;
+      }
+
+      dt {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 900;
+      }
+
+      dd {
+        margin: 0;
+      }
+
+      code {
+        background: #ece9df;
+        border-radius: 5px;
+        color: #273b36;
+        padding: 0.08rem 0.32rem;
+      }
+
+      .section-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 1rem;
+      }
+
+      .source-order {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .source-reader-layout {
+        align-items: start;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+        margin-top: 1rem;
+      }
+
+      .source-reader-left {
+        min-width: 0;
+      }
+
+      .source-reader-right {
+        min-width: 0;
+      }
+
+      .sticky-explanation {
+        position: sticky;
+        top: 1rem;
+      }
+
+      .fixed-explanation {
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+      }
+
+      .order-step {
+        background: #fbfaf7;
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--forest);
+        border-radius: 8px;
+        padding: 0.85rem;
+      }
+
+      .order-step h3 {
+        color: var(--forest-dark);
+        font-size: 1rem;
+        margin-bottom: 0.35rem;
+      }
+
+      .order-step p {
+        margin: 0.25rem 0;
+      }
+
+      .order-reason {
+        color: var(--forest-dark);
+        font-weight: 700;
+      }
+
+      .order-link {
+        color: var(--muted);
+      }
+
+      .bottom-brain {
+        align-items: center;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(10rem, 0.4fr) minmax(0, 1fr);
+        margin-top: 1rem;
+      }
+
+      .brain-core {
+        align-items: center;
+        background: var(--forest-dark);
+        border-radius: 8px;
+        color: #fffdf6;
+        display: flex;
+        font-size: 1.12rem;
+        font-weight: 900;
+        justify-content: center;
+        min-height: 10rem;
+        padding: 1rem;
+        text-align: center;
+      }
+
+      .brain-spokes {
+        display: grid;
+        gap: 0.65rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .brain-spoke {
+        background: #fbfaf7;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.75rem;
+      }
+
+      .coverage-list,
+      .index-list {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 0.75rem;
+      }
+
+      .coverage-card,
+      .index-card {
+        background: #fbfaf7;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.85rem;
+      }
+
+      .index-card {
+        cursor: pointer;
+      }
+
+      .index-card:hover {
+        border-color: var(--forest);
+      }
+
+      .index-title {
+        color: var(--forest-dark);
+        font-weight: 900;
+        margin-bottom: 0.25rem;
+      }
+
+      ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.2rem;
+      }
+
+      @media (min-width: 981px) {
+        body {
+          padding-right: var(--detail-width);
+        }
+
+        .source-reader-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .fixed-explanation {
+          bottom: 1rem;
+          position: fixed;
+          right: 1rem;
+          top: 1rem;
+          width: calc(var(--detail-width) - 2rem);
+          z-index: 20;
+        }
+      }
+
+      @media (max-width: 980px) {
+        .workspace,
+        .section-grid,
+        .source-reader-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .detail,
+        .sticky-explanation,
+        .fixed-explanation {
+          position: static;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>互動式 DEF 流程圖</h1>
+      <p>
+        這份文件用可點擊流程圖說明 `app.py`、`connection_checks.py` 和 `tests/`
+        的每個重要 def 在做什麼、彼此怎麼連起來，以及哪些測試保護了哪些行為。
+      </p>
+    </header>
+
+    <main>
+      <section class="workspace">
+        <div class="panel">
+          <h2>DEF 心智圖</h2>
+          <div class="mind-map" id="flow-map">
+            <div class="mind-center">程式 DEF 關係圖</div>
+            <div class="mind-branches">
+              <div class="brain-network">
+                像大腦一樣讀：先看 app.py 由上到下建立哪些記憶節點，再看每個葉節點連到哪些 def。
+              </div>
+            <div class="branch source">
+              <div class="branch-title">app.py 從上到下</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button class="node leaf-node" data-function="source_imports">
+                  imports
+                </button>
+                <span class="arrow">→</span>
+                <button class="node leaf-node" data-function="proxy_bootstrap">
+                  proxy bootstrap
+                </button>
+                <span class="arrow">→</span>
+                <button class="node leaf-node" data-function="env_contract">
+                  env contract
+                </button>
+                <span class="arrow">→</span>
+                <button class="node leaf-node" data-function="prompt_contract">
+                  prompt contract
+                </button>
+                <span class="arrow">→</span>
+                <button class="node leaf-node" data-function="ui_constants">
+                  UI constants
+                </button>
+                <span class="arrow">→</span>
+                <button class="node leaf-node" data-function="main_guard">
+                  main guard
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：這一支不是 def，而是 app.py 開頭先建立的「全域記憶」，後面的 def 都會讀它們。</div>
+              </div>
+            </div>
+            <div class="branch setup">
+              <div class="branch-title">Streamlit 啟動與設定</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button class="node" data-function="render_app">
+                  render_app()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node utility" data-function="load_settings">
+                  load_settings()
+                </button>
+                <span class="arrow">→</span>
+                <button
+                  class="node utility"
+                  data-function="find_missing_settings"
+                >
+                  find_missing_settings()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node" data-function="load_google_sheet">
+                  load_google_sheet()
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：先確認 .env，再讀 Google Sheets，避免 AI 流程拿不到資料。</div>
+              </div>
+            </div>
+
+            <div class="branch ai">
+              <div class="branch-title">AI 問答資料流</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button class="node" data-function="build_context">
+                  build_context()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node" data-function="ask_ai">ask_ai()</button>
+                <span class="arrow">→</span>
+                <button class="node utility" data-function="parse_ai_json">
+                  parse_ai_json()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node utility" data-function="_as_text">
+                  _as_text()
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：`ask_ai()` 負責問模型，`parse_ai_json()` 負責把回答整理回固定格式。</div>
+              </div>
+            </div>
+
+            <div class="branch analysis">
+              <div class="branch-title">推薦後處理與圖表</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button
+                  class="node analysis"
+                  data-function="find_related_plants_by_ids"
+                >
+                  find_related_plants_by_ids()
+                </button>
+                <span class="arrow">→</span>
+                <button
+                  class="node analysis"
+                  data-function="build_coverage_analysis"
+                >
+                  build_coverage_analysis()
+                </button>
+                <span class="arrow">→</span>
+                <button
+                  class="node analysis"
+                  data-function="coverage_line_chart"
+                >
+                  coverage_line_chart()
+                </button>
+              </div>
+              <div class="node-row" style="margin-top: 0.55rem">
+                <button
+                  class="node analysis"
+                  data-function="build_recommendation_summary"
+                >
+                  build_recommendation_summary()
+                </button>
+                <span class="arrow">+</span>
+                <button
+                  class="node analysis"
+                  data-function="build_seasonal_matrix"
+                >
+                  build_seasonal_matrix()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node utility" data-function="_seasonal_symbol">
+                  _seasonal_symbol()
+                </button>
+                <span class="arrow">→</span>
+                <button class="node utility" data-function="_is_active">
+                  _is_active()
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：AI 只給 plant_ids，後面的矩陣、摘要和折線圖都由本地資料重新計算。</div>
+              </div>
+            </div>
+
+            <div class="branch ui">
+              <div class="branch-title">HTML 小元件與顯示清理</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button
+                  class="node utility"
+                  data-function="inject_dashboard_css"
+                >
+                  inject_dashboard_css()
+                </button>
+                <span class="arrow">+</span>
+                <button class="node utility" data-function="dashboard_card">
+                  dashboard_card()
+                </button>
+                <span class="arrow">+</span>
+                <button class="node utility" data-function="metric_card">
+                  metric_card()
+                </button>
+                <span class="arrow">+</span>
+                <button
+                  class="node utility"
+                  data-function="dashboard_section_title"
+                >
+                  dashboard_section_title()
+                </button>
+                <span class="arrow">+</span>
+                <button
+                  class="node utility"
+                  data-function="hide_internal_id_columns"
+                >
+                  hide_internal_id_columns()
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：這一支主要處理畫面一致性和安全顯示，例如 escape HTML 與隱藏內部 ID。</div>
+              </div>
+            </div>
+
+            <div class="branch checks">
+              <div class="branch-title">連線檢查腳本</div>
+              <div class="branch-items">
+              <div class="node-row">
+                <button class="node check" data-function="run_checks">
+                  run_checks()
+                </button>
+                <span class="arrow">→</span>
+                <button
+                  class="node check"
+                  data-function="public_settings_summary"
+                >
+                  public_settings_summary()
+                </button>
+                <span class="arrow">+</span>
+                <button class="node check" data-function="check_google_sheets">
+                  check_google_sheets()
+                </button>
+                <span class="arrow">+</span>
+                <button class="node check" data-function="check_openai">
+                  check_openai()
+                </button>
+              </div>
+              <div class="mind-note"><strong>重點提示</strong>：`run_checks()` 是 smoke check 總入口，用來分別確認 Sheets 和 OpenAI 可以連。</div>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="source-reader-layout"
+        id="app-sequential-walkthrough"
+        data-source-order="app-py-1-to-end"
+      >
+        <div class="panel source-order source-reader-left">
+        <h2>app.py 原始碼順序講解：第 1 行到最後一行</h2>
+        <p>
+          這一段完全照 `app.py` 的原始碼順序讀，不重新分類。Python 會先執行最上面的 import 和全域設定，遇到 def 時只「登記函式」，直到最後 `if __name__ == "__main__"` 才真正呼叫 `render_app()` 啟動畫面。
+        </p>
+
+        <article class="order-step line-1-10">
+          <h3>第 1-10 行：imports，先準備整個 app 會用到的工具</h3>
+          <p>`json` 給 `parse_ai_json()` 解析模型回傳；`os` 給設定與 proxy；`escape` 給 HTML 安全輸出；`altair` 畫圖；`gspread` 讀 Google Sheets；`pandas` 處理 DataFrame；`streamlit` 產生 UI；`load_dotenv` 讀 `.env`；`OpenAI` 呼叫模型。</p>
+          <p class="order-reason">為什麼這樣寫：import 必須放最上面，讓後面的常數和 def 都能直接使用這些工具。</p>
+          <p class="order-link">連到哪裡：`json` 連到 `parse_ai_json()`；`gspread` 連到 `load_google_sheet()`；`OpenAI` 連到 `ask_ai()`；`st` 連到 `render_app()`。</p>
+          <button class="node leaf-node" data-function="source_imports">看 imports 連到哪</button>
+        </article>
+
+        <article class="order-step line-13-33 line-24-33">
+          <h3>第 13-33 行：proxy 防護，先清掉會阻擋外部 API 的壞設定</h3>
+          <p>先定義 `DEAD_LOCAL_PROXY` 與 `PROXY_ENV_VARS`，再定義 `disable_dead_local_proxy()`。第 33 行立刻執行它，因為後面 Google Sheets 和 OpenAI 都需要正常連線。</p>
+          <p class="order-reason">為什麼這樣寫：這段要在任何 API client 建立前先執行，避免後面連線全部被壞 proxy 卡住。</p>
+          <p class="order-link">連到哪裡：保護 `load_google_sheet()` 和 `ask_ai()` 的外部網路請求。</p>
+          <button class="node leaf-node" data-function="proxy_bootstrap">看 proxy bootstrap</button>
+        </article>
+
+        <article class="order-step line-36-60">
+          <h3>第 36-60 行：環境變數與月份契約</h3>
+          <p>`REQUIRED_ENV_VARS` 告訴 app 哪些 `.env` 設定一定要有；`MONTHS` 把資料欄位的英文月份 key 對到畫面上的 1-12 月。後面的設定檢查、季節矩陣、覆蓋分析都會依賴它。</p>
+          <p class="order-reason">為什麼這樣寫：把必要設定和月份對照集中在前面，後面函式就不必各自硬寫一份規則。</p>
+          <p class="order-link">連到哪裡：`REQUIRED_ENV_VARS` 連到 `find_missing_settings()`；`MONTHS` 連到 `build_seasonal_matrix()`、`build_coverage_analysis()`、`coverage_line_chart()`。</p>
+          <button class="node leaf-node" data-function="env_contract">看 env contract</button>
+        </article>
+
+        <article class="order-step line-62">
+          <h3>第 62 行：FINAL_REMINDER，先定義 AI 回答最後要提醒的話</h3>
+          <p>這句會被塞進 `SYSTEM_PROMPT`，確保 AI 回答時提醒使用者實際配置仍要看基地條件。</p>
+          <p class="order-reason">為什麼這樣寫：提醒語只定義一次，prompt 多處引用時不會不一致。</p>
+          <p class="order-link">連到哪裡：被第 64-111 行的 `SYSTEM_PROMPT` 插入使用。</p>
+          <button class="node leaf-node" data-function="prompt_contract">看 prompt contract</button>
+        </article>
+
+        <article class="order-step line-64-111">
+          <h3>第 64-111 行：SYSTEM_PROMPT，規定 AI 要怎麼回答</h3>
+          <p>這是整個 AI agent 的回答規格。它要求模型只回 JSON，`answer` 放給人看的文字，`plant_ids` 放真正關聯到 Google Sheet 的植物 ID。後面 `ask_ai()` 會送出這段，`parse_ai_json()` 會照這個格式解析。</p>
+          <p class="order-reason">為什麼這樣寫：先把 AI 輸出格式講死，後面的程式才能穩定解析，不會每次回來都長不一樣。</p>
+          <p class="order-link">連到哪裡：`ask_ai()` 負責送出 prompt；`parse_ai_json()` 負責接住 prompt 要求的 JSON。</p>
+          <button class="node" data-function="ask_ai">看 ask_ai()</button>
+          <button class="node utility" data-function="parse_ai_json">看 parse_ai_json()</button>
+        </article>
+
+        <article class="order-step line-113-130">
+          <h3>第 113-130 行：顯示欄位與範例問題</h3>
+          <p>`RELATED_PLANT_COLUMNS` 決定推薦植物表格要露出哪些欄；`EXAMPLE_QUESTIONS` 是左側快速提問按鈕。它們本身不執行流程，但會被 `render_app()` 拿來組畫面。</p>
+          <p class="order-reason">為什麼這樣寫：把畫面會用到的欄位和範例集中管理，避免 UI 區塊裡散落太多固定資料。</p>
+          <p class="order-link">連到哪裡：都在 `render_app()` 裡被使用。</p>
+          <button class="node" data-function="render_app">看 render_app()</button>
+        </article>
+
+        <article class="order-step line-132-273">
+          <h3>第 132-273 行：DASHBOARD_CSS，先把整個 Streamlit 視覺風格寫好</h3>
+          <p>這一大段是森林色系、卡片、metric、按鈕、DataFrame 的 CSS。它先被定義成字串，等到 `inject_dashboard_css()` 被 `render_app()` 呼叫時才真正注入畫面。</p>
+          <p class="order-reason">為什麼這樣寫：Streamlit 的客製樣式需要透過 HTML/CSS 注入，所以先把樣式收成一個大字串。</p>
+          <p class="order-link">連到哪裡：`inject_dashboard_css()` 讀它，`render_app()` 呼叫 `inject_dashboard_css()`。</p>
+          <button class="node utility" data-function="inject_dashboard_css">看 inject_dashboard_css()</button>
+        </article>
+
+        <article class="order-step line-275-298">
+          <h3>第 275-298 行：UI 小函式，處理 CSS、卡片、指標與區塊標題</h3>
+          <p>這裡開始進入 def。Python 讀到 def 時先登記，不會馬上執行。這幾個函式都服務 `render_app()`，讓畫面組裝可以重複使用。</p>
+          <p class="order-reason">為什麼這樣寫：把重複的 HTML 卡片和標題抽成函式，`render_app()` 才不會每次都手寫一大段 HTML。</p>
+          <p class="order-link">連到哪裡：全部由 `render_app()` 在畫面組裝時呼叫。</p>
+          <button class="node utility" data-function="dashboard_card">dashboard_card()</button>
+          <button class="node utility" data-function="metric_card">metric_card()</button>
+          <button class="node utility" data-function="dashboard_section_title">dashboard_section_title()</button>
+        </article>
+
+        <article class="order-step line-301-327">
+          <h3>第 301-327 行：設定與 Google Sheets 讀取</h3>
+          <p>`load_settings()` 讀 `.env`；`load_google_sheet()` 用 service account 打開指定 worksheet，轉成 DataFrame，並保留 `plant_id` 的前導 0。這是資料進入 app 的入口。</p>
+          <p class="order-reason">為什麼這樣寫：先把設定讀取和 Sheet 讀取分開，出錯時比較知道是 `.env` 問題還是 Google Sheets 問題。</p>
+          <p class="order-link">連到哪裡：`render_app()` 先呼叫 `load_settings()`，再呼叫兩次 `load_google_sheet()` 讀 plants 和 display_matrix。</p>
+          <button class="node utility" data-function="load_settings">load_settings()</button>
+          <button class="node" data-function="load_google_sheet">load_google_sheet()</button>
+        </article>
+
+        <article class="order-step line-330-394">
+          <h3>第 330-394 行：把資料送進 AI，再把 AI 回答收回來</h3>
+          <p>`build_context()` 把兩張表變 CSV 文字；`parse_ai_json()` 把模型回答整理成固定 dict；`ask_ai()` 把 prompt、問題、context 送給 OpenAI，最後回傳解析後的結果。</p>
+          <p class="order-reason">為什麼這樣寫：AI 需要文字 context 才能回答，而程式需要結構化 JSON 才能繼續做推薦表格和圖表。</p>
+          <p class="order-link">連到哪裡：`render_app()` 呼叫 `build_context()`，再呼叫 `ask_ai()`；`ask_ai()` 內部再呼叫 `parse_ai_json()`。</p>
+          <button class="node" data-function="build_context">build_context()</button>
+          <button class="node utility" data-function="parse_ai_json">parse_ai_json()</button>
+          <button class="node" data-function="ask_ai">ask_ai()</button>
+        </article>
+
+        <article class="order-step line-397-468">
+          <h3>第 397-468 行：設定檢查、文字正規化、植物比對與季節符號</h3>
+          <p>這一段是資料清理層：檢查缺少哪些設定、把值轉成文字、根據 AI 的答案或 plant_ids 找植物、隱藏內部 ID、把 Google Sheets 的 1/0/true/false 轉成季節符號。</p>
+          <p class="order-reason">為什麼這樣寫：Google Sheets 和 AI 回傳都可能有空值、數字、字串混用，所以先用小函式統一資料格式。</p>
+          <p class="order-link">連到哪裡：`render_app()` 會呼叫 `find_missing_settings()`、`find_related_plants_by_ids()`、`hide_internal_id_columns()`；季節相關函式會被 `build_seasonal_matrix()` 使用。</p>
+          <button class="node utility" data-function="find_missing_settings">find_missing_settings()</button>
+          <button class="node utility" data-function="_as_text">_as_text()</button>
+          <button class="node analysis" data-function="find_related_plants_by_ids">find_related_plants_by_ids()</button>
+          <button class="node utility" data-function="_seasonal_symbol">_seasonal_symbol()</button>
+        </article>
+
+        <article class="order-step line-471-603">
+          <h3>第 471-603 行：推薦結果的矩陣、統計圖與摘要</h3>
+          <p>`build_seasonal_matrix()` 產生 12 個月觀賞矩陣；`build_coverage_analysis()` 算每月開花與葉色覆蓋量；`coverage_line_chart()` 畫 Altair 折線圖；`build_recommendation_summary()` 做 dashboard 指標摘要。</p>
+          <p class="order-reason">為什麼這樣寫：AI 只負責推薦植物 ID，視覺化和統計要由本地資料重新計算，結果才可控、可測試。</p>
+          <p class="order-link">連到哪裡：`render_app()` 在拿到 related plants 後呼叫這一組函式，產生右側分析畫面。</p>
+          <button class="node analysis" data-function="build_seasonal_matrix">build_seasonal_matrix()</button>
+          <button class="node analysis" data-function="build_coverage_analysis">build_coverage_analysis()</button>
+          <button class="node analysis" data-function="coverage_line_chart">coverage_line_chart()</button>
+          <button class="node analysis" data-function="build_recommendation_summary">build_recommendation_summary()</button>
+        </article>
+
+        <article class="order-step line-606-787">
+          <h3>第 606-787 行：render_app()，真正把所有前面定義的東西串起來</h3>
+          <p>這是主流程。它設定 Streamlit 頁面、注入 CSS、讀設定、檢查缺漏、讀兩張 Google Sheet、畫 metric、建立輸入區、按下按鈕後建立 context、問 AI、解析 plant_ids、顯示推薦植物、摘要、折線圖和季節矩陣。</p>
+          <p class="order-reason">為什麼這樣寫：前面所有常數和小函式都先準備好，主流程最後才負責按照使用者操作把它們串起來。</p>
+          <p class="order-link">連到哪裡：幾乎所有 `app.py` 的 helper 都被它直接或間接使用，是整個 app 的中心。</p>
+          <button class="node" data-function="render_app">render_app center</button>
+        </article>
+
+        <article class="order-step line-789-790">
+          <h3>第 789-790 行：main guard，最後才決定要不要啟動 app</h3>
+          <p>如果直接執行 `app.py`，這裡會呼叫 `render_app()`。如果測試只是 import `app.py`，這裡不會啟動 Streamlit，所以測試可以安全地拿函式來測。</p>
+          <p class="order-reason">為什麼這樣寫：讓同一個檔案可以被直接執行，也可以被測試 import，而不會一 import 就開 UI。</p>
+          <p class="order-link">連到哪裡：直接連到 `render_app()`。</p>
+          <button class="node leaf-node" data-function="main_guard">看 main guard</button>
+        </article>
+        </div>
+        <aside
+          class="panel detail sticky-explanation fixed-explanation source-reader-right"
+          id="function-detail"
+          aria-live="polite"
+        >
+          <p>右邊會固定顯示目前點選節點的詳細解釋。</p>
+        </aside>
+      </section>
+
+      <section class="panel" id="bottom-brain-map">
+        <h2>最下面的大腦放射連結圖</h2>
+        <div class="bottom-brain">
+          <div class="brain-core">render_app center</div>
+          <div class="brain-spokes">
+            <div class="brain-spoke"><button class="node leaf-node" data-function="source_imports">imports</button><p>所有工具先載入，後面 def 才能使用。</p></div>
+            <div class="brain-spoke"><button class="node leaf-node" data-function="prompt_contract">SYSTEM_PROMPT</button><p>AI 的回答格式從這裡散發到 `ask_ai()` 與 `parse_ai_json()`。</p></div>
+            <div class="brain-spoke"><button class="node utility" data-function="load_settings">settings</button><p>設定先通過檢查，才會往 Google Sheets 和 OpenAI 走。</p></div>
+            <div class="brain-spoke"><button class="node" data-function="load_google_sheet">Google Sheets</button><p>兩張表進入 DataFrame，成為 AI context 和分析資料。</p></div>
+            <div class="brain-spoke"><button class="node" data-function="ask_ai">AI call</button><p>問題、prompt、context 在這裡會合。</p></div>
+            <div class="brain-spoke"><button class="node analysis" data-function="build_coverage_analysis">analysis</button><p>AI 回傳 plant_ids 後，本地重新計算矩陣、摘要與圖表。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-grid">
+        <div class="panel">
+          <h2>測試連結區</h2>
+          <div class="coverage-list">
+            <article class="coverage-card">
+              <h3>tests/test_app_core.py</h3>
+              <p>
+                保護 `app.py` 的核心資料處理：HTML escape、環境變數缺漏、AI JSON
+                解析、植物 ID 對應、季節矩陣、覆蓋分析、推薦摘要，以及
+                `ask_ai()` 能把 OpenAI 回傳轉成一致格式。
+              </p>
+            </article>
+            <article class="coverage-card">
+              <h3>tests/test_connection_checks.py</h3>
+              <p>
+                保護 `connection_checks.py` 的設定讀取、API key 不外洩、Google
+                Sheets 兩張 worksheet 抽樣讀取，以及 OpenAI models list 檢查。
+              </p>
+            </article>
+            <article class="coverage-card">
+              <h3>偏 UI 的流程</h3>
+              <p>
+                `render_app()`、`inject_dashboard_css()` 和 Streamlit
+                版面組裝主要靠整合行為支撐；單元測試集中在它們呼叫的純函式，讓資料處理邏輯可以穩定回歸測試。
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>完整 def 索引</h2>
+          <div class="index-list" id="function-index"></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const functionData = {
+        source_imports: {
+          title: "imports",
+          file: "app.py:1-10",
+          lines: "app.py:1-10",
+          type: "原始碼順序",
+          purpose:
+            "這是 app.py 的第一層依賴。`import json` 用來解析 AI JSON；`import os` 讀環境變數；`escape` 保護 HTML；`altair` 畫圖；`gspread` 讀 Google Sheets；`pandas` 處理表格；`streamlit` 畫 UI；`load_dotenv` 讀 .env；`OpenAI` 呼叫模型。",
+          inputs: "Python 執行 app.py 時先載入這些套件。",
+          outputs: "後面所有 def 可用的模組名稱：json, os, escape, alt, gspread, pd, st, load_dotenv, OpenAI。",
+          callers: "Python import/runtime。",
+          calls:
+            "連到 parse_ai_json(json)、load_settings(os/load_dotenv)、dashboard_card/metric_card/section_title(escape)、coverage_line_chart(alt)、load_google_sheet(gspread/pd)、render_app(st)、ask_ai(OpenAI)。",
+          tests:
+            "tests/test_app_core.py 透過各功能間接驗證這些 import 被正確使用。",
+        },
+        proxy_bootstrap: {
+          title: "proxy bootstrap",
+          file: "app.py:13-33",
+          lines: "app.py:24-33",
+          type: "原始碼順序",
+          purpose:
+            "`DEAD_LOCAL_PROXY` 和 `PROXY_ENV_VARS` 定義要清掉的壞 proxy；`disable_dead_local_proxy()` 會在檔案載入時立刻執行，避免 Google/OpenAI request 被導到 127.0.0.1:9。",
+          inputs:
+            "環境變數 HTTP_PROXY, HTTPS_PROXY, ALL_PROXY 以及小寫版本。",
+          outputs: "移除含有 `127.0.0.1:9` 的 proxy env var。",
+          callers: "app.py top-level 直接呼叫 `disable_dead_local_proxy()`。",
+          calls: "連到 load_google_sheet 與 ask_ai，因為這兩個都需要外部 API 連線穩定。",
+          tests: "目前沒有直接 unit test；屬於啟動防護邏輯。",
+        },
+        env_contract: {
+          title: "env contract",
+          file: "app.py:36-60",
+          lines: "app.py:36-60",
+          type: "原始碼順序",
+          purpose:
+            "`REQUIRED_ENV_VARS` 是 app 啟動前必須存在的設定契約；`MONTHS` 是 display_matrix 欄位和月份顯示用的對照表。",
+          inputs: ".env 與 Google Sheets 欄位命名。",
+          outputs:
+            "find_missing_settings 用 REQUIRED_ENV_VARS 檢查設定；build_seasonal_matrix、build_coverage_analysis、coverage_line_chart 用 MONTHS 走完 1-12 月。",
+          callers: "find_missing_settings, build_seasonal_matrix, build_coverage_analysis, coverage_line_chart。",
+          calls:
+            "連到 load_settings 取得設定，再連到 render_app 決定是否能繼續載入 Google Sheets。",
+          tests:
+            "test_find_missing_settings_returns_required_empty_values_in_required_order 與季節/覆蓋分析測試間接覆蓋。",
+        },
+        prompt_contract: {
+          title: "prompt contract",
+          file: "app.py:62-111",
+          lines: "app.py:62-111",
+          type: "原始碼順序",
+          purpose:
+            "`FINAL_REMINDER` 和 `SYSTEM_PROMPT` 是 AI 回答規格。它要求模型只回 JSON，answer 放人類可讀文字，plant_ids 放真正要推薦的植物 ID。",
+          inputs: "使用者問題、Google Sheets context、prompt 規則。",
+          outputs:
+            "ask_ai 送給 OpenAI 的 system message；parse_ai_json 期待收到符合這個契約的 JSON。",
+          callers: "ask_ai。",
+          calls:
+            "連到 parse_ai_json，因為 prompt 要求的輸出格式就是 parse_ai_json 要解析的格式。",
+          tests:
+            "test_system_prompt_keeps_plant_ids_out_of_answer_text, test_system_prompt_requires_three_section_answer_format, test_system_prompt_requires_planting_layer_recommendations。",
+        },
+        ui_constants: {
+          title: "UI constants",
+          file: "app.py:113-273",
+          lines: "app.py:113-273",
+          type: "原始碼順序",
+          purpose:
+            "`RELATED_PLANT_COLUMNS` 決定推薦植物表格顯示哪些欄；`EXAMPLE_QUESTIONS` 是左側範例按鈕；`DASHBOARD_CSS` 是整個 Streamlit dashboard 的視覺樣式。",
+          inputs: "Google Sheets 欄位、示範問題、CSS class。",
+          outputs:
+            "render_app 用這些常數組裝畫面；inject_dashboard_css 把 DASHBOARD_CSS 注入頁面。",
+          callers: "render_app, inject_dashboard_css。",
+          calls:
+            "連到 metric_card、dashboard_card、dashboard_section_title、hide_internal_id_columns，形成 UI 顯示層。",
+          tests:
+            "test_dashboard_css_uses_forest_palette_and_card_classes, test_example_questions_are_demo_ready。",
+        },
+        main_guard: {
+          title: "main guard",
+          file: "app.py:789-790",
+          lines: "app.py:789-790",
+          type: "原始碼順序",
+          purpose:
+            "`if __name__ == \"__main__\"` 是檔案最後的入口開關。直接執行 app.py 時才呼叫 render_app()；被測試 import 時不會自動啟動 Streamlit。",
+          inputs: "Python 的 __name__ 值。",
+          outputs: "決定是否呼叫 render_app()。",
+          callers: "Python runtime。",
+          calls: "render_app。",
+          tests:
+            "沒有直接測 main guard；測試透過 import app.py 取得函式，沒有啟動 Streamlit，表示這個隔離方式有發揮作用。",
+        },
+        render_app: {
+          file: "app.py",
+          lines: "app.py:606-787",
+          type: "主流程",
+          purpose:
+            "Streamlit 應用的入口。它設定頁面、載入設定、讀 Google Sheets、接收使用者問題、呼叫 AI，最後把答案、植物表格、覆蓋分析圖和季節矩陣顯示出來。",
+          inputs:
+            "無直接參數；從 .env、Google Sheets、Streamlit session state 和使用者輸入取得資料。",
+          outputs: "沒有 return；輸出是 Streamlit 畫面。",
+          callers: "__main__ 區塊在直接執行 app.py 時呼叫。",
+          calls:
+            "inject_dashboard_css, load_settings, find_missing_settings, load_google_sheet, build_context, ask_ai, find_related_plants_by_ids, build_coverage_analysis, build_recommendation_summary, coverage_line_chart, build_seasonal_matrix, hide_internal_id_columns。",
+          tests:
+            "沒有直接測 render_app；tests/test_app_core.py 測它依賴的純函式。",
+        },
+        inject_dashboard_css: {
+          file: "app.py",
+          lines: "app.py:275-277",
+          type: "UI",
+          purpose:
+            "把 DASHBOARD_CSS 注入 Streamlit，讓整個 dashboard 套用森林色系、卡片、按鈕和表格樣式。",
+          inputs: "無。",
+          outputs: "沒有 return；透過 st.markdown 注入 CSS。",
+          callers: "render_app。",
+          calls: "st.markdown。",
+          tests:
+            "test_dashboard_css_uses_forest_palette_and_card_classes 檢查 CSS 有主要色票與 class。",
+        },
+        dashboard_card: {
+          file: "app.py",
+          lines: "app.py:279-286",
+          type: "UI",
+          purpose:
+            "產生一般說明卡片 HTML，並使用 escape 避免輸入內容變成可執行 HTML。",
+          inputs: "title, body。",
+          outputs: "HTML 字串。",
+          callers: "render_app。",
+          calls: "escape。",
+          tests: "test_dashboard_card_escapes_content_and_adds_title。",
+        },
+        metric_card: {
+          file: "app.py",
+          lines: "app.py:288-295",
+          type: "UI",
+          purpose: "產生指標卡片 HTML，例如資料筆數、模型名稱、資料來源。",
+          inputs: "label, value。",
+          outputs: "HTML 字串。",
+          callers: "render_app。",
+          calls: "escape。",
+          tests: "test_metric_card_escapes_value_and_label。",
+        },
+        dashboard_section_title: {
+          file: "app.py",
+          lines: "app.py:297-298",
+          type: "UI",
+          purpose: "產生區塊標題 HTML，統一 dashboard 裡每個區段的標題樣式。",
+          inputs: "title。",
+          outputs: "HTML 字串。",
+          callers: "render_app。",
+          calls: "escape。",
+          tests: "test_dashboard_section_title_escapes_content。",
+        },
+        load_settings: {
+          file: "app.py, connection_checks.py",
+          lines: "app.py:301-313; connection_checks.py:18-29",
+          type: "設定",
+          purpose:
+            "讀取 .env 與環境變數，集中取得 Google Sheets、worksheet、OpenAI API key 和模型設定。",
+          inputs: "無。",
+          outputs: "settings dict。",
+          callers: "render_app, run_checks, tests。",
+          calls: "load_dotenv, os.getenv。",
+          tests:
+            "test_load_settings_reads_required_env_values_without_exposing_secrets 間接驗證 connection_checks 版本。",
+        },
+        load_google_sheet: {
+          file: "app.py",
+          lines: "app.py:315-327",
+          type: "資料讀取",
+          purpose:
+            "用 service account 連到指定 spreadsheet 和 worksheet，把資料轉成 pandas DataFrame，並保留 plant_id 的前導 0。",
+          inputs: "spreadsheet_id, worksheet_name, service_account_file。",
+          outputs: "DataFrame。",
+          callers: "render_app。",
+          calls:
+            "gspread.service_account, open_by_key, worksheet, get_all_records, pd.DataFrame。",
+          tests:
+            "沒有直接 unit test；connection_checks 的 check_google_sheets 測類似連線路徑。",
+        },
+        build_context: {
+          file: "app.py",
+          lines: "app.py:330-339",
+          type: "AI 輸入",
+          purpose:
+            "把 plants 和 display_matrix 兩張 DataFrame 轉成 CSV 文字，組成要送給 AI 的資料背景。",
+          inputs: "plants_df, display_df。",
+          outputs: "context 字串。",
+          callers: "render_app。",
+          calls: "DataFrame.to_csv。",
+          tests:
+            "test_build_context_includes_plants_and_display_matrix_csv_sections。",
+        },
+        ask_ai: {
+          file: "app.py",
+          lines: "app.py:376-394",
+          type: "AI",
+          purpose:
+            "建立 OpenAI client，送出 system prompt、使用者問題和 Google Sheets context，取得模型回答後交給 parse_ai_json 正規化。",
+          inputs: "question, context, api_key, model, client=None。",
+          outputs: "dict，包含 answer 與 plant_ids。",
+          callers: "render_app, tests。",
+          calls: "OpenAI, client.responses.create, parse_ai_json。",
+          tests: "test_ask_ai_returns_parsed_json_result。",
+        },
+        parse_ai_json: {
+          file: "app.py",
+          lines: "app.py:342-374",
+          type: "AI 輸出整理",
+          purpose:
+            "把 AI 回傳文字清掉 markdown code block，嘗試解析 JSON。如果 JSON 壞掉，就退回成純文字 answer 與空 plant_ids。",
+          inputs: "raw_text。",
+          outputs:
+            "dict，包含 answer 與 plant_ids，plant_ids 會整理成文字 list。",
+          callers: "ask_ai, tests。",
+          calls: "_as_text, json.loads。",
+          tests:
+            "test_parse_ai_json_extracts_answer_and_plant_ids_from_clean_json, test_parse_ai_json_tolerates_markdown_code_blocks_and_normalizes_ids, test_parse_ai_json_falls_back_to_answer_text_when_json_is_invalid。",
+        },
+        find_missing_settings: {
+          file: "app.py, connection_checks.py",
+          lines: "app.py:397-404; connection_checks.py:31-36",
+          type: "設定檢查",
+          purpose:
+            "檢查必要環境變數是否缺漏，讓畫面或 smoke check 能在真正連線前先報錯。",
+          inputs: "settings dict。",
+          outputs: "缺漏設定名稱 list。",
+          callers: "render_app, run_checks, tests。",
+          calls: "_as_text 或 str(...).strip。",
+          tests:
+            "test_find_missing_settings_returns_required_empty_values_in_required_order, test_find_missing_settings_reports_empty_required_values。",
+        },
+        _as_text: {
+          file: "app.py",
+          lines: "app.py:406-409",
+          type: "工具",
+          purpose:
+            "把 None、NaN 或其他值轉成乾淨字串，避免資料比對和輸出時出現不一致。",
+          inputs: "value。",
+          outputs: "strip 後的字串；NaN 回空字串。",
+          callers:
+            "parse_ai_json, find_missing_settings, find_related_plants, find_related_plants_by_ids, build_seasonal_matrix, build_coverage_analysis, build_recommendation_summary。",
+          calls: "pd.isna。",
+          tests: "透過多個資料處理測試間接覆蓋。",
+        },
+        find_related_plants: {
+          file: "app.py",
+          lines: "app.py:412-425",
+          type: "推薦比對",
+          purpose:
+            "從 AI answer 文字裡搜尋中文名或學名，找出被提到的植物。這是舊式文字比對路徑。",
+          inputs: "answer, plants_df。",
+          outputs: "匹配植物 DataFrame。",
+          callers: "tests；目前 render_app 改用 plant_ids 路徑。",
+          calls: "_as_text, DataFrame.iterrows。",
+          tests:
+            "test_find_related_plants_matches_answer_text_against_chinese_and_scientific_names, test_find_related_plants_preserves_leading_zero_plant_id。",
+        },
+        find_related_plants_by_ids: {
+          file: "app.py",
+          lines: "app.py:428-436",
+          type: "推薦比對",
+          purpose:
+            "根據 AI 回傳的 plant_ids 從 plants_df 篩出真正存在的植物，是目前主流程使用的精準關聯方式。",
+          inputs: "plant_ids, plants_df。",
+          outputs: "匹配植物 DataFrame；沒有 IDs 時保留欄位但回空表。",
+          callers: "render_app, tests。",
+          calls: "_as_text, DataFrame.isin。",
+          tests:
+            "test_find_related_plants_by_ids_matches_only_existing_sheet_ids, test_find_related_plants_by_ids_preserves_columns_when_empty。",
+        },
+        hide_internal_id_columns: {
+          file: "app.py",
+          lines: "app.py:439-440",
+          type: "顯示整理",
+          purpose:
+            "顯示表格前移除內部用的 plant_id，避免使用者看到不必要的 ID。",
+          inputs: "df。",
+          outputs: "移除 plant_id 欄位後的 DataFrame。",
+          callers: "render_app, tests。",
+          calls: "DataFrame.drop。",
+          tests:
+            "test_hide_internal_id_columns_removes_plant_id_from_display_tables。",
+        },
+        _is_active: {
+          file: "app.py",
+          lines: "app.py:443-455",
+          type: "資料正規化",
+          purpose:
+            "把 Google Sheets 裡代表有無開花或有無葉色的值轉成 boolean，支援 1/0、true/false、yes/no 等格式。",
+          inputs: "value。",
+          outputs: "boolean。",
+          callers: "_seasonal_symbol, build_coverage_analysis。",
+          calls: "pd.isna。",
+          tests:
+            "透過 build_seasonal_matrix 與 build_coverage_analysis 測試間接覆蓋。",
+        },
+        _seasonal_symbol: {
+          file: "app.py",
+          lines: "app.py:458-468",
+          type: "季節矩陣",
+          purpose:
+            "根據單月的 flower 與 leaf 狀態產生季節符號：花、葉、兩者都有或空白。",
+          inputs: "flower_value, leaf_value。",
+          outputs: "符號字串。",
+          callers: "build_seasonal_matrix。",
+          calls: "_is_active。",
+          tests:
+            "test_build_seasonal_matrix_renders_symbols_and_keeps_plant_identity。",
+        },
+        build_seasonal_matrix: {
+          file: "app.py",
+          lines: "app.py:471-498",
+          type: "季節矩陣",
+          purpose:
+            "把被推薦的植物和 display_matrix 合併成 1 到 12 月的觀賞狀態表。",
+          inputs: "plants_df, display_df。",
+          outputs: "季節矩陣 DataFrame。",
+          callers: "render_app, tests。",
+          calls: "_as_text, _seasonal_symbol。",
+          tests:
+            "test_build_seasonal_matrix_renders_symbols_and_keeps_plant_identity。",
+        },
+        build_coverage_analysis: {
+          file: "app.py",
+          lines: "app.py:501-541",
+          type: "統計",
+          purpose:
+            "計算每個月有幾種推薦植物開花、有幾種有葉色，以及總觀賞量，供折線圖使用。",
+          inputs: "plants_df, display_df。",
+          outputs: "coverage DataFrame，每個月三列指標。",
+          callers: "render_app, tests。",
+          calls: "_as_text, _is_active。",
+          tests:
+            "test_build_coverage_analysis_counts_monthly_flower_leaf_and_total。",
+        },
+        coverage_line_chart: {
+          file: "app.py",
+          lines: "app.py:544-570",
+          type: "圖表",
+          purpose:
+            "用 Altair 把 coverage DataFrame 轉成月分折線圖，讓使用者看推薦組合的季節表現。",
+          inputs: "coverage_df。",
+          outputs: "Altair Chart。",
+          callers: "render_app。",
+          calls: "alt.Chart, mark_line, encode。",
+          tests: "沒有直接 unit test；資料來源 build_coverage_analysis 有測。",
+        },
+        build_recommendation_summary: {
+          file: "app.py",
+          lines: "app.py:573-603",
+          type: "摘要",
+          purpose:
+            "計算推薦植物總數、不同 plant_type 的數量，以及觀賞量最高的月份，做成 dashboard 指標卡。",
+          inputs: "plants_df, coverage_df。",
+          outputs: "label/value tuple list。",
+          callers: "render_app, tests。",
+          calls: "_as_text。",
+          tests:
+            "test_build_recommendation_summary_counts_plant_types_and_peak_months, test_build_recommendation_summary_handles_missing_data。",
+        },
+        public_settings_summary: {
+          file: "connection_checks.py",
+          lines: "connection_checks.py:39-49",
+          type: "連線檢查",
+          purpose:
+            "把 settings 轉成可安全列印的摘要，OPENAI_API_KEY 只顯示 present 或 missing，不洩漏真正 secret。",
+          inputs: "settings dict。",
+          outputs: "安全版 settings dict。",
+          callers: "run_checks, tests。",
+          calls: "dict.get。",
+          tests:
+            "test_load_settings_reads_required_env_values_without_exposing_secrets。",
+        },
+        check_google_sheets: {
+          file: "connection_checks.py",
+          lines: "connection_checks.py:51-70",
+          type: "連線檢查",
+          purpose:
+            "依照設定打開 plants 與 display_matrix 兩張 worksheet，各讀 A1:E5 作為 smoke check。",
+          inputs: "settings, client=None。",
+          outputs: "每張 worksheet 的名稱與 sample_rows list。",
+          callers: "run_checks, tests。",
+          calls: "gspread.service_account, open_by_key, worksheet, get。",
+          tests: "test_check_google_sheets_reads_both_configured_worksheets。",
+        },
+        check_openai: {
+          file: "connection_checks.py",
+          lines: "connection_checks.py:73-81",
+          type: "連線檢查",
+          purpose:
+            "用 OpenAI API key 呼叫 models.list，確認 OpenAI 連線和憑證可用。",
+          inputs: "settings, client=None。",
+          outputs: "模型名稱、回傳模型數量、第一個模型 ID。",
+          callers: "run_checks, tests。",
+          calls: "OpenAI, client.models.list。",
+          tests: "test_check_openai_lists_models_without_returning_secret。",
+        },
+        run_checks: {
+          file: "connection_checks.py",
+          lines: "connection_checks.py:84-94",
+          type: "連線檢查",
+          purpose:
+            "連線檢查總入口：讀設定、檢查缺漏，然後依序跑安全設定摘要、Google Sheets 檢查與 OpenAI 檢查。",
+          inputs: "無。",
+          outputs:
+            "包含 settings、google_sheets、openai 三段結果的 dict；缺設定時 raise RuntimeError。",
+          callers: "手動 smoke command 或 CI/開發者執行。",
+          calls:
+            "load_settings, find_missing_settings, public_settings_summary, check_google_sheets, check_openai。",
+          tests: "run_checks 沒有直接單元測試；它的組成函式都有測。",
+        },
+      };
+
+      const typeClass = {
+        主流程: "tag",
+        UI: "tag amber",
+        設定: "tag amber",
+        資料讀取: "tag blue",
+        "AI 輸入": "tag blue",
+        AI: "tag blue",
+        "AI 輸出整理": "tag blue",
+        設定檢查: "tag amber",
+        工具: "tag",
+        推薦比對: "tag blue",
+        顯示整理: "tag amber",
+        資料正規化: "tag",
+        季節矩陣: "tag blue",
+        統計: "tag blue",
+        圖表: "tag blue",
+        摘要: "tag blue",
+        連線檢查: "tag clay",
+        原始碼順序: "tag",
+      };
+
+      function renderDetail(name) {
+        const item = functionData[name];
+        const detail = document.getElementById("function-detail");
+        if (!item) return;
+        const title = item.title || `${name}()`;
+
+        document.querySelectorAll("[data-function]").forEach((node) => {
+          node.classList.toggle("active", node.dataset.function === name);
+        });
+
+        detail.innerHTML = `
+          <h2>${title}</h2>
+          <div class="detail-meta">
+            <span class="${typeClass[item.type] || "tag"}">${item.type}</span>
+            <span class="tag blue">${item.file}</span>
+          </div>
+          <dl>
+            <div><dt>Source lines</dt><dd>${item.lines}</dd></div>
+            <div><dt>在幹嘛</dt><dd>${item.purpose}</dd></div>
+            <div><dt>吃什麼</dt><dd>${item.inputs}</dd></div>
+            <div><dt>吐什麼</dt><dd>${item.outputs}</dd></div>
+            <div><dt>誰呼叫它</dt><dd>${item.callers}</dd></div>
+            <div><dt>它呼叫誰</dt><dd>${item.calls}</dd></div>
+            <div><dt>測試對應</dt><dd>${item.tests}</dd></div>
+          </dl>
+        `;
+      }
+
+      function renderIndex() {
+        const index = document.getElementById("function-index");
+        index.innerHTML = Object.keys(functionData)
+          .sort()
+          .map((name) => {
+            const item = functionData[name];
+            const title = item.title || `${name}()`;
+            return `
+          <article class="index-card" data-function="${name}" tabindex="0">
+            <div class="index-title">${title}</div>
+            <span class="${typeClass[item.type] || "tag"}">${item.type}</span>
+            <span class="tag blue">${item.file}</span>
+            <p>${item.purpose}</p>
+          </article>
+        `;
+          })
+          .join("");
+      }
+
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-function]");
+        if (target) renderDetail(target.dataset.function);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (
+          (event.key === "Enter" || event.key === " ") &&
+          event.target.matches(".index-card")
+        ) {
+          event.preventDefault();
+          renderDetail(event.target.dataset.function);
+        }
+      });
+
+      renderIndex();
+      renderDetail("render_app");
+    </script>
+  </body>
+</html>
