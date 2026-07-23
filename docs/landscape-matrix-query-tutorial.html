@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Landscape Matrix Query｜互動式程式教學</title>
+    <style>
+      :root { --ink:#17211e; --paper:#f7f5ef; --panel:#fffdf8; --line:#d8ddd2; --green:#37624c; --leaf:#b9cf9c; --gold:#c99845; --blue:#3e6c80; --muted:#65716c; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.7 system-ui, -apple-system, "Noto Sans TC", sans-serif; }
+      header { padding:3.5rem max(2rem, calc((100vw - 1240px)/2)); background:var(--ink); color:white; }
+      .eyebrow { color:var(--leaf); font-weight:700; }
+      h1 { margin:.25rem 0 .75rem; font-size:clamp(2rem,4vw,3.6rem); letter-spacing:0; line-height:1.12; }
+      h2 { margin:0 0 .7rem; line-height:1.25; } h3 { margin:.1rem 0 .45rem; line-height:1.35; }
+      .intro { max-width:780px; color:#d8e0d9; }
+      .path { display:inline-block; padding:.2rem .55rem; border:1px solid #b9cf9c66; color:#eaf1e3; font:13px ui-monospace, monospace; }
+      main { max-width:1240px; margin:0 auto; padding:2.4rem 1.4rem 5rem; }
+      .legend { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0 2rem; }
+      .tag { padding:.25rem .65rem; border-radius:999px; font-size:.86rem; background:#e6ece4; color:#264937; }
+      .tag.ai { background:#e8f0f4; color:#245268; }.tag.ui { background:#f7ecd8; color:#7b561b; }.tag.test { background:#eee8f4; color:#604782; }
+      .reader { display:grid; grid-template-columns:minmax(0, 1fr) 420px; gap:1.25rem; align-items:start; }
+      .source-panel, .detail-panel, .mindmap, .test-panel { border:1px solid var(--line); background:var(--panel); border-radius:8px; }
+      .source-panel { padding:1.2rem; }
+      .detail-panel { position:fixed; top:1rem; right:max(1.4rem, calc((100vw - 1240px) / 2 + 1.4rem)); width:420px; max-height:calc(100vh - 2rem); overflow:auto; padding:1.35rem; box-shadow:0 12px 35px #17211e18; }
+      .source-step { width:100%; text-align:left; border:1px solid var(--line); border-left:5px solid var(--green); background:white; border-radius:6px; padding:1rem; margin:.75rem 0; cursor:pointer; color:inherit; font:inherit; }
+      .source-step:hover, .source-step.active { border-color:var(--green); background:#f0f5eb; box-shadow:0 3px 12px #17211e12; }
+      .source-step.ai { border-left-color:var(--blue); }.source-step.ui { border-left-color:var(--gold); }.source-step.test { border-left-color:#80619f; }
+      .lines { color:var(--muted); font:13px ui-monospace, monospace; }
+      .step-title { display:block; font-weight:800; font-size:1.08rem; margin:.15rem 0; }
+      .step-short { color:#4f5a55; font-size:.93rem; }
+      .detail-type { display:inline-block; padding:.15rem .48rem; border-radius:4px; background:#e7efe5; color:#315a43; font-size:.82rem; font-weight:800; }
+      .detail-grid { display:grid; gap:.75rem; margin-top:1rem; }
+      .detail-item { padding:.75rem; background:#f5f6f1; border-left:3px solid var(--leaf); }
+      .detail-item b { display:block; margin-bottom:.2rem; color:#345443; }
+      code { font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; background:#eef0e9; padding:.08rem .25rem; border-radius:3px; }
+      .mindmap { margin-top:3rem; padding:1.5rem; overflow:hidden; }
+      .mind-center { margin:1.3rem auto; max-width:270px; text-align:center; padding:1rem; border-radius:50%; background:var(--ink); color:white; font-weight:800; box-shadow:0 0 0 12px #dce8d1; }
+      .branches { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:1rem; position:relative; }
+      .branch { border-top:3px solid var(--green); padding:.75rem; background:#fafbf7; }
+      .branch.ai { border-color:var(--blue); }.branch.ui { border-color:var(--gold); }.branch.test { border-color:#80619f; }
+      .branch h3 { font-size:1rem; }
+      .node { display:block; width:100%; margin:.4rem 0; padding:.55rem .6rem; border:1px solid var(--line); background:white; border-radius:5px; cursor:pointer; text-align:left; font:inherit; color:inherit; }
+      .node:hover { border-color:var(--green); background:#f0f5eb; }
+      .test-panel { margin-top:2rem; padding:1.2rem; }
+      .test-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
+      .test-card { padding:.8rem; background:#f5f1f9; border-left:4px solid #80619f; }
+      .footer-note { margin-top:2rem; color:var(--muted); font-size:.92rem; }
+      @media (max-width:900px) { .reader { grid-template-columns:1fr; }.detail-panel { position:static; max-height:none; order:-1; }.branches,.test-list { grid-template-columns:1fr; } header { padding:2.4rem 1.3rem; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">INTERACTIVE CODE WALKTHROUGH</div>
+      <h1>Landscape Matrix Query<br />互動式程式教學</h1>
+      <p class="intro">從新版入口開始，依照實際原始碼順序走過 Streamlit UI、白話條件翻譯、Pandas 篩選、55 筆景觀提案候選、OpenAI 回答驗證，以及測試保護網。</p>
+      <span class="path">streamlit run landscape_matrix_query.py</span>
+    </header>
+    <main>
+      <div class="legend"><span class="tag">設定／資料</span><span class="tag ai">AI／條件解析</span><span class="tag ui">Streamlit UI</span><span class="tag test">測試</span></div>
+      <section class="reader">
+        <div class="source-panel">
+          <h2>原始碼順序閱讀</h2>
+          <p>左側完全按照檔案由上到下的順序。點一個區塊，右側會固定顯示它的詳細說明。</p>
+          <div id="source-order"></div>
+        </div>
+        <aside class="detail-panel" id="function-detail" aria-live="polite"></aside>
+      </section>
+
+      <section class="mindmap" id="bottom-brain-map">
+        <h2>主流程心智圖</h2>
+        <p>中心是 <code>render_app()</code>。每個節點都可點擊，會更新右側說明。</p>
+        <button class="mind-center" data-function="render_app">render_app()<br />新版 Streamlit 主流程</button>
+        <div class="branches">
+          <div class="branch"><h3>啟動、設定、資料</h3><button class="node" data-function="entry_launcher">入口 launcher</button><button class="node" data-function="ui_bootstrap">UI import 與 legacy bridge</button><button class="node" data-function="load_matrix_settings">load_matrix_settings()</button><button class="node" data-function="load_matrix">load_matrix()</button></div>
+          <div class="branch ai"><h3>白話問題到可查條件</h3><button class="node" data-function="query_constants">條件常數與設計色調</button><button class="node" data-function="extract_known_filters">extract_known_filters()</button><button class="node" data-function="parse_question_to_filters">parse_question_to_filters()</button><button class="node" data-function="apply_filters">apply_filters()</button><button class="node" data-function="score_candidates">score_candidates()</button></div>
+          <div class="branch ai"><h3>AI 回答與景觀提案</h3><button class="node" data-function="build_ai_context">build_ai_context()</button><button class="node" data-function="generate_grounded_answer">generate_grounded_answer()</button><button class="node" data-function="generate_design_proposal">generate_design_proposal()</button><button class="node" data-function="validate_design_proposal">validate_design_proposal()</button></div>
+          <div class="branch ui"><h3>顯示與視覺化</h3><button class="node" data-function="render_filters">render_filters()</button><button class="node" data-function="render_results">render_results()</button><button class="node" data-function="render_plant_cards">render_plant_cards()</button><button class="node" data-function="build_seasonal_matrix">build_seasonal_matrix()</button><button class="node" data-function="build_coverage_analysis">build_coverage_analysis()</button></div>
+          <div class="branch test"><h3>資料可信度與測試</h3><button class="node" data-function="normalize_matrix_data">normalize_matrix_data()</button><button class="node" data-function="find_relaxed_candidates">find_relaxed_candidates()</button><button class="node" data-function="matrix_tests">test_matrix_query.py</button><button class="node" data-function="legacy_connection">app.py / connection_checks.py</button></div>
+          <div class="branch"><h3>選植邏輯</h3><button class="node" data-function="select_recommendations">select_recommendations()</button><button class="node" data-function="palette_logic">色調、花果葉與分層</button><button class="node" data-function="main_guard_ui">新版 main guard</button></div>
+        </div>
+      </section>
+
+      <section class="test-panel"><h2>測試如何保護新版</h2><div class="test-list"><div class="test-card"><b>資料正規化</b><br />布林值、多值顏色、粉色／粉紅、月份欄位。</div><div class="test-card"><b>查詢與設計模式</b><br />白話條件、庭院提案、色調、近似結果、高中低層。</div><div class="test-card"><b>AI 安全邊界</b><br />候選 plant_id 驗證、提示詞固定格式、設計提案不可憑空選植物。</div></div></section>
+      <p class="footer-note">資料依據：<code>landscape_matrix_query.py</code>、<code>matrix_question_app/landscape_matrix_query.py</code>、<code>matrix_question_app/matrix_query.py</code>、<code>matrix_question_app/tests/test_matrix_query.py</code>。若實際程式碼後續改動，請一併更新本教學頁的 Source lines。</p>
+    </main>
+    <script>
+      const D = (lines, type, purpose, why, inputs, outputs, callers, calls, tests) => ({ lines, type, purpose, why, inputs, outputs, callers, calls, tests });
+      const data = {
+        entry_launcher: D('landscape_matrix_query.py:1-7','啟動入口','這個檔案本身很薄，只從新版 UI 模組 import `render_app()`，再由 main guard 啟動它。','保留一個好記的根目錄檔名，使用者可直接輸入 `streamlit run landscape_matrix_query.py`，不用記子資料夾路徑。','Python 執行環境、`matrix_question_app.landscape_matrix_query.render_app`。','直接執行時啟動新版 Streamlit；import 時只提供 `render_app` 名稱。','Python runtime；使用者的 Streamlit 指令。','import `render_app()`。','以 py_compile 與 Streamlit 啟動檢查驗證；沒有獨立 unit test。'),
+        main_guard_entry: D('landscape_matrix_query.py:6-7','入口控制','`if __name__ == "__main__"` 只在此檔作為程式入口時呼叫 `render_app()`。','避免測試或其他模組 import launcher 時意外啟動網頁。','Python 的 `__name__`。','呼叫或不呼叫 `render_app()`。','Python runtime。','`render_app()`。','間接由啟動檢查保護。'),
+        ui_imports: D('matrix_question_app/landscape_matrix_query.py:1-29','UI 初始化','匯入 JSON、路徑、Altair、Pandas、Streamlit，並把專案根目錄放到 `sys.path` 最前面，再匯入舊版 `app.py` 的設定與 Google Sheet 函式，以及新版 query 核心函式。','新版 UI 檔名在子資料夾內也叫 app 類型模組；調整 `sys.path` 可避免誤 import 自己造成循環匯入。','Python 套件、舊版 `app.py` 的 `disable_dead_local_proxy`、`load_google_sheet`、`load_settings`。','UI 模組可使用所有資料／AI／顯示函式。','Python import/runtime。','legacy app helpers、`matrix_query.py` 的函式。','py_compile 與 Streamlit 啟動檢查；循環 import 是此段要避免的風險。'),
+        ui_bootstrap: D('matrix_question_app/landscape_matrix_query.py:1-39','UI 啟動區塊','涵蓋 imports、根目錄路徑修正、legacy bridge、CSV fallback 路徑、查詢版本與範例問題。','常數在任何 UI 渲染前就位；版本字串會讓 Streamlit session 中舊的查詢結果失效。','Python 路徑、既有 `.env`、本機 CSV 檔。','新版 UI 的全域設定與範例題目。','`render_app()`。','legacy helpers、query core。','新版 UI 以啟動與編譯檢查間接驗證。'),
+        load_matrix_settings: D('matrix_question_app/landscape_matrix_query.py:40-49','設定','沿用舊版 `load_settings()`，再補上 merged matrix 的 Sheet ID 與 worksheet 名稱。若未設 merged 專用 Sheet ID，使用 `PLANTS_MERGED_SPREADSHEET_ID`。','重用既有 API key 與 service account 設定，同時讓 merged matrix 可獨立配置。','`.env`、舊版 settings dict。','含 merged Sheet 設定的 dict。','`load_matrix()`、`render_app()`。','`load_settings()`、`os.getenv()`。','目前無直接 unit test；由實際 Google Sheet 載入驗證。'),
+        load_matrix: D('matrix_question_app/landscape_matrix_query.py:52-68','資料讀取','快取 5 分鐘讀取 Google Sheet 的 `display_matrix_merged`，成功後正規化；若失敗才讀本機 preview CSV。','API 是主要資料來源，但本機 CSV 能讓服務在短暫斷線時仍可展示可用資料。','merged Sheet 設定、service account、CSV fallback。','`(DataFrame, source_label)`。','`render_app()`。','`load_matrix_settings()`、舊版 `load_google_sheet()`、`normalize_matrix_data()`、`pd.read_csv()`。','資料正規化與查詢測試間接覆蓋；實際 API smoke check 已使用。'),
+        render_filters: D('matrix_question_app/landscape_matrix_query.py:70-95','UI','在 sidebar 顯示月份、觀賞重點、型態、顏色、資料信心、排除複查、推薦數量與「查資料／景觀提案」模式。','手動條件必須保持可見，並在合併時優先於 AI 猜測。','動態 filter options、`st.session_state`。','manual filters dict。','`render_app()`。','Streamlit multiselect、checkbox、slider、radio。','UI 沒有直接 unit test；核心合併規則有測。'),
+        render_plant_cards: D('matrix_question_app/landscape_matrix_query.py:98-113','UI','每株推薦植物用 expander 顯示型態、花果葉色、匹配原因、信心、待複查警示，以及景觀提案角色。','把 Python 可驗證資料與 AI 的「設計角色」分開，避免把設計想法當成植物事實。','selected DataFrame、roles dict。','Streamlit 植物卡。','`render_results()`。','`st.expander`、`st.write`、`st.warning`。','UI 整合行為；資料欄位由 query tests 保護。'),
+        build_proposal_overview: D('matrix_question_app/landscape_matrix_query.py:115-133','UI 資料整理','把選定植物壓成一張立即可讀的提案表：景觀角色、植物、型態、可確認的花果葉色。','景觀提案不能只有氣氛文案，使用者應先看到真正選了哪些植物。','selected DataFrame、roles dict。','overview DataFrame。','`render_results()`。','Pandas DataFrame。','UI 整合行為；`validate_design_proposal()` 測試確保選定 ID 可追溯。'),
+        describe_applied_filters: D('matrix_question_app/landscape_matrix_query.py:135-156','UI 文字化','把內部 JSON filter 轉成「月份、花色、型態、設計色調」等白話摘要。','初學者不應先看到 JSON；研究者仍可在展開區看原始條件。','applied filters dict。','可顯示的中文條件字串。','`render_results()`。','純字串組裝。','目前無直接 unit test；依賴 filter 結構測試。'),
+        render_results: D('matrix_question_app/landscape_matrix_query.py:158-210','UI 主結果','依序顯示 AI 結論／景觀提案、提案植物表、白話查詢依據、資料限制、指標、植物卡、季節矩陣、覆蓋圖與複查提醒。','先顯示答案與實際植物，再顯示技術細節，讓一般使用者和研究者都能閱讀。','result dict：answer、selected、filters、roles、data_limit。','完整 Streamlit 結果區。','`render_app()`。','`build_proposal_overview()`、`render_plant_cards()`、`build_seasonal_matrix()`、`build_coverage_analysis()`、Altair。','UI 整合行為；下游純函式有 unit tests。'),
+        render_app: D('matrix_question_app/landscape_matrix_query.py:213-293','新版主流程','設定 Streamlit 頁面、讀 merged matrix、收集問題與手動篩選；先做白話規則解析，再請 AI 補足條件；接著 Pandas 篩選／評分／近似結果，最後走一般回答或景觀提案路徑並存入 session state。','它必須最後定義，因為前面所有 helper 都要先存在，才能把資料、AI 與 UI 串起來。','`.env`、Google Sheet、CSV fallback、使用者問題、sidebar state、OpenAI API。','沒有 return；輸出 Streamlit 網頁並寫入 `matrix_result`。','launcher main guard、此檔 main guard。','幾乎所有 UI 與 query core 函式。','沒有直接 unit test；22 個 matrix query tests 與啟動檢查共同保護。'),
+        main_guard_ui: D('matrix_question_app/landscape_matrix_query.py:293-294','入口控制','此檔被直接執行時也能呼叫 `render_app()`；正常使用時根目錄 launcher 會 import 它。','保留直接在子資料夾啟動的能力，也讓模組 import 不會自行跑 UI。','Python `__name__`。','可選的 `render_app()` 呼叫。','Python runtime。','`render_app()`。','啟動檢查間接覆蓋。'),
+        core_imports: D('matrix_question_app/matrix_query.py:1-10','核心初始化','匯入 JSON、正規表示式、Pandas 與 OpenAI。','這是純邏輯層，不依賴 Streamlit，因而可被 unit test 直接驗證。','Python 套件。','資料處理與 API 呼叫工具。','Python import/runtime。','後面所有 core functions。','所有 `test_matrix_query.py`。'),
+        query_constants: D('matrix_question_app/matrix_query.py:11-75','查詢契約','集中定義月份、花果葉欄位、預設條件、評分權重、顏色同義詞、季節、白話型態、不可驗證條件與設計風格。','規則集中才不會在 UI、AI、Pandas 各寫一套互相衝突的邏輯。','資料欄位命名與產品規則。','後續解析、篩選、評分的共同語言。','多數 query functions。','`extract_known_filters()`、`apply_filters()`、`score_candidates()`。','粉色、庭院、古典感、香檳色等測試。'),
+        as_text: D('matrix_question_app/matrix_query.py:78-81','正規化','把 None、NaN 或任何資料值整理成可安全比對的字串。','Google Sheet / CSV 的空值型態不一致，先統一能減少後面錯誤。','任何 value。','strip 後字串。','幾乎所有 core functions。','`pd.isna()`。','多個資料處理測試間接覆蓋。'),
+        normalize_boolean: D('matrix_question_app/matrix_query.py:84-89','正規化','支援 bool、1/0、TRUE/FALSE、yes/no、是等格式，轉成 Python bool。','月份矩陣的資料來源可能用不同文字表示真假。','Sheet/CSV cell value。','boolean。','`normalize_matrix_data()`、月份判斷。','`as_text()`。','test_boolean_normalization。'),
+        normalize_multivalue_text: D('matrix_question_app/matrix_query.py:92-100','正規化','拆分中英文逗號、頓號、分號、斜線與空白，移除「色」字並套用粉色→粉紅、橙→橘等同義詞。','使用者和資料表常用不同分隔符與顏色寫法。','欄位文字或使用者顏色詞。','不重複的標準化字串 list。','顏色 options、值比對。','`as_text()`、COLOR_ALIASES。','test_multivalue_text_normalizes_separators_and_color_suffix、粉色測試。'),
+        normalize_matrix_data: D('matrix_question_app/matrix_query.py:103-118','資料清理','複製 merged matrix，固定 plant_id 與文字欄、把 36 個月份欄轉 bool、needs_review 轉 bool、updated_at 轉 datetime。','只在記憶體處理，原始資料不被改寫。','原始 DataFrame。','可供查詢的 normalized DataFrame。','`load_matrix()`、tests。','`as_text()`、`normalize_boolean()`、Pandas。','布林、月份、needs_review 相關測試。'),
+        extract_filter_options: D('matrix_query.py:121-129','篩選選項工具','讀取單一欄位，拆開其中的多值文字，整理成不重複選項。','花色可能同時寫多個值，不能直接把整格字串當一個選項。','DataFrame、欄位名稱。','排序前的 option list。','`build_filter_options()`。','`normalize_multivalue_text()`。','由顏色與白話詞測試間接覆蓋。'),
+        build_filter_options: D('matrix_query.py:121-139','篩選選項','從實際資料動態整理植物型態、生長型態與三種顏色欄位的可選值。','sidebar 不應硬寫一份可能過期的選項。','normalized DataFrame。','options dict。','`render_app()`、`extract_known_filters()`。','`extract_filter_options()`、`normalize_multivalue_text()`。','白話條件與顏色測試間接覆蓋。'),
+        _months_from_question: D('matrix_query.py:142-160','月份工具','辨識春夏秋冬、3-5 月、3月到5月等文字，轉成 1-12 月整數 list。','月份解析應先在 Python 穩定處理，不完全依賴模型。','question 字串。','排序後月份 list。','`extract_known_filters()`。','SEASON_MONTHS、正規表示式。','庭院夏季與月份篩選測試間接覆蓋。'),
+        extract_known_filters: D('matrix_query.py:142-197','白話翻譯','先用 Python 辨識季節、月份、花果葉、樹／灌木／地被、粉色、庭院、香檳色、古典感、溫暖感。','高頻白話詞不該完全交給 AI 猜；這讓同義詞能穩定查到資料。','question、filter options。','filters dict，含 unverified terms、設計色調與組合模式。','`render_app()`。','`_months_from_question()`、常數詞典。','庭院、粉色、古典感、香檳色、組合模式測試。'),
+        merge_known_and_ai_filters: D('matrix_query.py:200-216','條件合併','已知白話規則優先，AI 只補使用者沒有明講的條件；設計色調會覆蓋 AI 自行猜的花／果／葉單一色。','避免「溫暖感」被 AI 縮成只查花。','AI filters、known filters。','合併 filters。','`render_app()`。','DEFAULT_FILTERS。','手動優先與設計色調測試間接覆蓋。'),
+        _parse_json: D('matrix_query.py:219-229','JSON 防呆','先直接解析 JSON，失敗時嘗試擷取最外層大括號；仍失敗就回傳 fallback。','模型偶爾會加上 code fence 或說明文字，不能因此讓 app 崩潰。','raw text、fallback dict。','dict。','`parse_question_to_filters()`、`generate_design_proposal()`。','json.loads、`as_text()`。','AI JSON fallback 測試間接覆蓋。'),
+        parse_question_to_filters: D('matrix_query.py:219-259','AI 條件解析','要求 OpenAI 將自然語言轉成嚴格 JSON；明確禁止把庭院、耐旱、日照等無欄位需求當成篩選條件。','AI 可以理解複雜敘述，但 Python 才是最後篩選執行者。','question、API key、model、可選 fake client。','filters dict；失敗時上層使用 default。','`render_app()`、tests。','OpenAI Responses API、`_parse_json()`、`normalize_boolean()`。','AI JSON fallback 與 fake client 測試。'),
+        merge_ai_and_manual_filters: D('matrix_query.py:262-272','條件合併','manual sidebar 有值時覆蓋 AI 條件；手動排除複查與推薦數量也會納入。','使用者最後決定權高於模型推測。','AI/known filters、manual filters。','實際 applied filters。','`render_app()`。','DEFAULT_FILTERS。','test_manual_filter_takes_precedence。'),
+        _row_matches_values: D('matrix_query.py:275-282','值比對工具','把某一列的多值文字與使用者選擇都正規化，再以交集判斷是否有任一項符合。','同欄多選應是 OR，例如紫或白都可。','欄位值、choices。','boolean。','`apply_filters()`、`_palette_parts()`、`score_candidates()`。','`normalize_multivalue_text()`。','顏色同義詞與多選測試間接覆蓋。'),
+        _month_match: D('matrix_query.py:285-293','月份工具','在指定月份中檢查花、果、葉任一指定觀賞部位是否活躍；沒有指定部位時三者任一即可。','「夏天的庭院」不能要求每株花果葉全有。','單筆 row、months、parts。','boolean。','`apply_filters()`。','MONTH_KEYS、MONTH_FIELD_PREFIXES、`normalize_boolean()`。','3 月花與花果 OR 測試。'),
+        apply_filters: D('matrix_query.py:275-335','Pandas 查詢','以 AND 串不同欄位、OR 串同一欄位多選；月份配合花果葉欄位；設計色調可在花、果、葉任一欄符合。','真實篩選在 Python 執行，AI 不會自行捏造結果。','normalized DataFrame、filters。','候選 DataFrame。','`render_app()`、`find_relaxed_candidates()`、tests。','`_row_matches_values()`、`_month_match()`。','3 月花、花果 OR、空篩選、粉色、香檳色等測試。'),
+        find_relaxed_candidates: D('matrix_query.py:338-350','近似結果','完全沒有結果時，依花色、果色、葉色、型態、生長型態、月份順序逐一放寬一項條件。','讓初學者不會只看到零筆資料，同時在 UI 明確標示放寬了什麼。','DataFrame、filters。','近似候選與被放寬欄位名稱。','`render_app()`。','`apply_filters()`。','test_relaxed_candidates_offer_a_near_match。'),
+        _active_months: D('matrix_query.py:353-355','月份工具','列出某植物在花、果或葉 prefix 下為 true 的所有月份。','把 12 個布林欄整理成易讀月份，是 context、評分與矩陣共用的基礎。','row、prefix。','月份整數 list。','`score_candidates()`、`build_ai_context()`。','MONTH_KEYS、`normalize_boolean()`。','矩陣與評分測試間接覆蓋。'),
+        _palette_parts: D('matrix_query.py:357-362','色調工具','檢查一列的花色、果色、葉色哪幾個部位符合指定設計色調。','設計色調是跨欄位 OR，不是硬逼一株植物同時花果葉都符合。','row、palette colors。','符合部位 list，例如花、果。','`score_candidates()`、`select_recommendations()`。','`_row_matches_values()`。','香檳色與色調角色測試。'),
+        score_candidates: D('matrix_query.py:353-399','評分','依月份、型態、色彩、信心、待複查、全年觀賞性、設計色調計算 `match_score` 與 `match_reasons`。','篩選後仍需排序，讓最符合條件且資料較可信的植物在前面。','候選 DataFrame、filters。','排序後 DataFrame，新增 score/reasons。','`render_app()`、tests。','`_active_months()`、`_palette_parts()`。','test_score_penalizes_review_rows。'),
+        select_recommendations: D('matrix_query.py:402-448','景觀選植','普通模式取最高分；景觀組合模式先保留高、中、低、其他型態，再補花、果、葉色調角色。','避免 8 株都變成同一型態或同一觀賞角色。','排序候選、filters。','selected DataFrame。','`render_app()`、tests。','`_landscape_layer()`、`_palette_parts()`。','高中低層與色調角色保留測試。'),
+        _landscape_layer: D('matrix_query.py:402-410','分層工具','依 plant_type 與 growth_form 推定高層喬木、中層灌木、低層地被／草本，其餘標為其他型態。','merged matrix 沒有可靠實際株高，因此必須明確叫做分層推定。','單筆植物 row。','高層／中層／低層／其他型態。','`select_recommendations()`。','`as_text()`。','景觀組合多層測試。'),
+        format_months: D('matrix_query.py:451-453','顯示工具','把月份整數 list 轉成「3、4、5」的中文顯示字串；空值顯示無。','AI context 不需要傳 36 個布林欄，縮寫更省 token。','月份 list。','顯示字串。','`build_ai_context()`。','字串 join。','context 筆數測試間接覆蓋。'),
+        build_ai_context: D('matrix_query.py:451-465','AI 資料上下文','把候選植物壓成精簡 JSON，將 36 個月欄濃縮為花期、果期、葉觀賞月份；一般回答最多 20 筆，景觀提案最多 55 筆。','避免把 955 筆或完整 36 欄矩陣都送給模型，減少成本與幻覺空間。','排序候選、filters、max_rows。','JSON context 字串。','`render_app()`。','`_active_months()`、`format_months()`、json.dumps。','test_context_is_limited_to_max_rows。'),
+        generate_grounded_answer: D('matrix_query.py:467-516','一般 AI 回答','使用固定三段式 prompt，要求只依候選資料列低中高層植物與 plant_id。','這是「查資料」模式的硬格式，讓回覆可回查。','question、applied filters、candidate context、API settings。','Markdown answer 字串。','`render_app()`。','OpenAI Responses API。','prompt contract fake client 測試。'),
+        generate_design_proposal: D('matrix_query.py:519-563','景觀 AI 提案','從最多 55 筆候選中挑 6-8 株，要求回傳與一般回答相同三段式 answer、plant_ids、roles、data_limit JSON。','景觀提案可以創意分配角色，但不能只寫氣氛文案或選候選外植物。','question、filters、55 筆 context、API settings。','proposal dict。','`render_app()`。','OpenAI Responses API、`_parse_json()`。','test_design_prompt_requires_named_plants_in_the_legacy_answer_shape。'),
+        validate_design_proposal: D('matrix_query.py:566-595','AI 安全驗證','只保留候選池裡存在的 plant_id；AI 沒選到有效 ID 時改用 Python 的 fallback selected；roles 也只保留選定植物。','模型輸出不能直接信任，這層防止虛構植物進入畫面。','proposal dict、55 筆 candidate_df、fallback_df、requested_count。','selected、answer、roles、data_limit dict。','`render_app()`、tests。','Pandas isin、as_text。','test_design_proposal_uses_only_candidate_ids_and_roles。'),
+        invalid_answer_plant_ids: D('matrix_query.py:598-602','AI 安全驗證','找出 answer 中明確寫出的 plant_id 是否有不在候選資料內的值。','一般查資料模式仍可能收到模型幻覺的 ID，需要在顯示前阻擋。','answer 字串、candidate DataFrame。','不合法 plant_id list。','`render_app()`。','正規表示式、`as_text()`。','test_answer_plant_ids_must_belong_to_candidates。'),
+        build_seasonal_matrix: D('matrix_query.py:605-613','季節矩陣','把 selected 植物轉成 1-12 月，每格顯示花、果、葉的實際組合。','讓推薦不只是一串名字，而能看到季節覆蓋。','selected DataFrame。','季節矩陣 DataFrame。','`render_results()`、tests。','MONTH_KEYS、MONTH_FIELD_PREFIXES。','test_matrix_contains_flower_fruit_leaf_symbols。'),
+        build_coverage_analysis: D('matrix_query.py:616-624','月覆蓋分析','計算每月有花、果、葉、任一觀賞特徵的推薦植物數。','可快速發現某個月份的搭配是否薄弱。','selected DataFrame。','coverage DataFrame。','`render_results()`。','Pandas sum/any。','以舊版 coverage 邏輯與 UI 整合驗證；新版無獨立測試。'),
+        palette_logic: D('matrix_query.py:56-75, 163-197, 296-335, 365-448','設計色調流程','香檳色、古典感、溫暖感先翻成可查顏色，再在花、果、葉任一欄做 OR 比對，最後用分層選植做組合。','設計詞不是資料欄位；必須先透明地翻成資料表可驗證的相近色系。','使用者風格詞、花果葉色欄位、型態欄位。','palette filters、景觀組合候選。','`extract_known_filters()`、`apply_filters()`、`select_recommendations()`。','DESIGN_STYLE_PROFILES、_palette_parts。','香檳、古典、色調角色保留測試。'),
+        legacy_bridge: D('app.py:24-33, 301-327；connection_checks.py:18-76','舊版共用與連線檢查','新版沿用舊版 proxy 防護、環境設定與 Google Sheet 讀取；`connection_checks.py` 則獨立提供 smoke check。','避免新舊兩套 API key 或 Google Sheet 客戶端邏輯分岔。','`.env`、service account、spreadsheet/worksheet 設定。','settings、Google Sheet DataFrame、連線檢查結果。','新版 `load_matrix()`、舊版 `render_app()`、`run_checks()`。','`load_settings()`、`load_google_sheet()`、gspread、OpenAI。','tests/test_connection_checks.py 與 tests/test_app_core.py。'),
+        matrix_tests: D('matrix_question_app/tests/test_matrix_query.py:1-206','測試','用 unittest 建立小型 DataFrame 與 fake OpenAI client，驗證白話詞、篩選、排名、色調、景觀組合、prompt 和 plant_id 安全性。','這些測試不需真的呼叫 API，能快速防止新規則破壞既有行為。','test fixtures、core functions。','通過／失敗的測試結果。','unittest runner。','`matrix_query.py` 的純函式與 AI prompt 函式。','本檔共 23 項測試；另有舊版 tests 33 項。'),
+      };
+      const order = [
+        ['entry_launcher','啟動入口：根目錄 launcher'], ['main_guard_entry','入口 main guard'], ['ui_imports','UI imports 與 legacy bridge'], ['ui_bootstrap','UI 常數、fallback、範例題目'], ['load_matrix_settings','讀新版 merged matrix 設定'], ['load_matrix','Google Sheet 優先、本機 CSV fallback'], ['render_filters','側邊欄篩選與回答模式'], ['render_plant_cards','推薦植物卡片'], ['build_proposal_overview','景觀提案立即清單'], ['describe_applied_filters','把條件翻成白話'], ['render_results','結果畫面組裝'], ['render_app','新版主流程'], ['main_guard_ui','UI 模組 main guard'], ['core_imports','query core imports'], ['query_constants','月份、詞典、色調與評分常數'], ['as_text','文字正規化'], ['normalize_boolean','布林正規化'], ['normalize_multivalue_text','多值與顏色正規化'], ['normalize_matrix_data','merged matrix 清理'], ['extract_filter_options','拆解多值篩選選項'], ['build_filter_options','動態 sidebar 選項'], ['_months_from_question','白話月份翻譯'], ['extract_known_filters','白話問題先翻譯'], ['merge_known_and_ai_filters','已知規則與 AI 合併'], ['_parse_json','AI JSON 防呆'], ['parse_question_to_filters','AI JSON 條件解析'], ['merge_ai_and_manual_filters','手動條件優先'], ['_row_matches_values','同欄 OR 值比對'], ['_month_match','花果葉月份比對'], ['apply_filters','Pandas 真正篩選'], ['find_relaxed_candidates','零筆時近似搜尋'], ['_active_months','取得活躍月份'], ['_palette_parts','色調符合的花果葉部位'], ['score_candidates','候選評分'], ['_landscape_layer','景觀高、中、低層推定'], ['select_recommendations','高中低層景觀選植'], ['format_months','月份縮寫'], ['build_ai_context','20／55 筆 AI context'], ['generate_grounded_answer','一般查資料回答'], ['generate_design_proposal','景觀提案回答'], ['validate_design_proposal','plant_id 防幻覺驗證'], ['invalid_answer_plant_ids','一般回答 ID 驗證'], ['build_seasonal_matrix','12 個月矩陣'], ['build_coverage_analysis','每月覆蓋統計'], ['palette_logic','設計色調跨欄位流程'], ['legacy_bridge','舊版 app.py 與 connection checks'], ['matrix_tests','新版測試保護網']
+      ];
+      const source = document.getElementById('source-order');
+      const detail = document.getElementById('function-detail');
+      function show(id) {
+        const x = data[id]; if (!x) return;
+        document.querySelectorAll('[data-function]').forEach(n => n.classList.toggle('active', n.dataset.function === id));
+        detail.innerHTML = `<span class="detail-type">${x.type}</span><h2>${id}</h2><div class="lines">Source lines：${x.lines}</div><div class="detail-grid"><div class="detail-item"><b>在幹嘛</b>${x.purpose}</div><div class="detail-item"><b>為什麼這樣寫</b>${x.why}</div><div class="detail-item"><b>吃什麼</b>${x.inputs}</div><div class="detail-item"><b>吐什麼</b>${x.outputs}</div><div class="detail-item"><b>誰呼叫它</b>${x.callers}</div><div class="detail-item"><b>它呼叫誰／連到哪裡</b>${x.calls}</div><div class="detail-item"><b>測試對應</b>${x.tests}</div></div>`;
+      }
+      order.forEach(([id,label]) => { const x=data[id]; const b=document.createElement('button'); b.className=`source-step ${x.type.includes('AI')?'ai':x.type.includes('UI')?'ui':x.type.includes('測試')?'test':''}`; b.dataset.function=id; b.innerHTML=`<span class="lines">${x.lines}</span><span class="step-title">${label}</span><span class="step-short">${x.purpose}</span>`; source.appendChild(b); });
+      document.addEventListener('click', e => { const n=e.target.closest('[data-function]'); if(n) show(n.dataset.function); });
+      show('render_app');
+    </script>
+  </body>
+</html>
