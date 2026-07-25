@@ -5,6 +5,7 @@ import pandas as pd
 from app import (
     DASHBOARD_CSS,
     EXAMPLE_QUESTIONS,
+    PLANTING_DESIGN_FRAMEWORK,
     REQUIRED_ENV_VARS,
     SYSTEM_PROMPT,
     ask_ai,
@@ -179,6 +180,14 @@ class AppCoreTests(unittest.TestCase):
         self.assertIn("低層植栽", SYSTEM_PROMPT)
         self.assertIn("中層植栽", SYSTEM_PROMPT)
         self.assertIn("高層植栽", SYSTEM_PROMPT)
+
+    def test_system_prompt_includes_planting_design_book_framework(self):
+        self.assertIn("The Planting Design Handbook", PLANTING_DESIGN_FRAMEWORK)
+        self.assertIn("植栽設計選種大要", PLANTING_DESIGN_FRAMEWORK)
+        self.assertIn("景觀植栽設計", PLANTING_DESIGN_FRAMEWORK)
+        self.assertIn("vegetation layers", SYSTEM_PROMPT)
+        self.assertIn("designed plant communities", SYSTEM_PROMPT)
+        self.assertIn("不可捏造書中原文、頁碼、案例", SYSTEM_PROMPT)
 
     def test_find_related_plants_by_ids_matches_only_existing_sheet_ids(self):
         plants_df = pd.DataFrame(

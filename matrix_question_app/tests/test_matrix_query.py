@@ -6,7 +6,7 @@ from matrix_question_app.matrix_query import (
     DEFAULT_FILTERS, FINAL_REMINDER, apply_filters, build_ai_context, build_seasonal_matrix,
     extract_known_filters, find_relaxed_candidates, generate_grounded_answer,
     generate_design_proposal, invalid_answer_plant_ids, merge_ai_and_manual_filters, normalize_boolean, normalize_matrix_data,
-    normalize_multivalue_text, score_candidates, select_recommendations, validate_design_proposal,
+    normalize_multivalue_text, PLANTING_DESIGN_FRAMEWORK, score_candidates, select_recommendations, validate_design_proposal,
 )
 
 
@@ -100,6 +100,10 @@ class MatrixQueryTests(unittest.TestCase):
         self.assertIn("中層植栽", prompt)
         self.assertIn("高層植栽", prompt)
         self.assertIn("景觀分層推定", prompt)
+        self.assertIn("The Planting Design Handbook", prompt)
+        self.assertIn("vegetation layers", prompt)
+        self.assertIn("designed plant communities", prompt)
+        self.assertIn("不可捏造書中原文、頁碼、案例", prompt)
 
     def test_plain_language_keeps_supported_pink_filter_and_marks_garden_unverified(self):
         options = {"plant_types": ["喬木", "灌木"], "flower_colors": ["粉紅", "紫"]}
@@ -200,6 +204,9 @@ class MatrixQueryTests(unittest.TestCase):
         self.assertIn("一、查詢結論與推薦植栽", prompt)
         self.assertIn("低層植栽、中層植栽、高層植栽、其他型態", prompt)
         self.assertIn("中文名｜scientific_name｜plant_id", prompt)
+        self.assertIn("植栽設計選種大要", prompt)
+        self.assertIn("景觀植栽設計", prompt)
+        self.assertIn(PLANTING_DESIGN_FRAMEWORK, prompt)
 
 
 if __name__ == "__main__":
