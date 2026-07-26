@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>景觀植物 AI 系統規格說明書</title>
+    <style>
+      :root {
+        --paper: #f6f4ee;
+        --ink: #17221f;
+        --muted: #65716c;
+        --panel: #fffdf8;
+        --line: #d8ddd2;
+        --forest: #315f49;
+        --leaf: #91a978;
+        --gold: #c99845;
+        --blue: #3e7085;
+        --rose: #b56670;
+        --violet: #75619c;
+        --shadow: 0 16px 36px rgba(23, 34, 31, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(180deg, rgba(145, 169, 120, 0.22), transparent 24rem),
+          var(--paper);
+        color: var(--ink);
+        font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+        line-height: 1.7;
+      }
+
+      header {
+        background: linear-gradient(135deg, #17221f, #315f49 64%, #536a55);
+        color: #fffdf8;
+        padding: 3rem max(1.2rem, calc((100vw - 1180px) / 2));
+      }
+
+      header p {
+        color: #e5ecdf;
+        max-width: 820px;
+        margin: 0.75rem 0 0;
+      }
+
+      h1, h2, h3 { line-height: 1.2; margin: 0; }
+      h1 { font-size: clamp(2rem, 4vw, 3.7rem); letter-spacing: 0; }
+      h2 { font-size: 1.35rem; margin-bottom: 0.75rem; }
+      h3 { font-size: 1.02rem; margin-bottom: 0.35rem; }
+
+      code {
+        background: #edf0e8;
+        border-radius: 4px;
+        color: #23342f;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 0.9em;
+        padding: 0.08rem 0.28rem;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 1.3rem 1.2rem 4rem;
+      }
+
+      .eyebrow {
+        color: #cfe0bf;
+        font-size: 0.86rem;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .path {
+        border: 1px solid rgba(255, 253, 248, 0.36);
+        border-radius: 5px;
+        color: #f7f1df;
+        display: inline-block;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.88rem;
+        margin-top: 1.2rem;
+        padding: 0.25rem 0.55rem;
+      }
+
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 0 0 1rem;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: rgba(246, 244, 238, 0.94);
+        border-bottom: 1px solid var(--line);
+        padding: 0.8rem 0;
+        backdrop-filter: blur(10px);
+      }
+
+      .tab {
+        background: #fffdf8;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 850;
+        padding: 0.5rem 0.75rem;
+      }
+
+      .tab.active {
+        background: var(--forest);
+        border-color: var(--forest);
+        color: white;
+      }
+
+      .view { display: none; }
+      .view.active { display: block; }
+
+      .panel, .card, .code-block, .flow-box {
+        background: rgba(255, 253, 248, 0.96);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .panel { padding: 1.2rem; }
+
+      .grid {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .two { grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.75fr); }
+      .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+      .card {
+        border-left: 5px solid var(--forest);
+        box-shadow: none;
+        padding: 1rem;
+      }
+
+      .card b {
+        color: var(--forest);
+        display: block;
+        margin-bottom: 0.2rem;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 1rem;
+      }
+
+      .pill, .risk, .kind {
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 900;
+        padding: 0.14rem 0.5rem;
+      }
+
+      .pill { background: #e7ece2; color: #2e4d3d; }
+      .pill.ai { background: #e3eef3; color: #27566a; }
+      .pill.ui { background: #f2e7d1; color: #6f4f17; }
+      .pill.data { background: #ece7f4; color: #5a477e; }
+      .pill.output { background: #f2e2e4; color: #854a53; }
+
+      .risk.low { background: #e7efe0; color: #315f49; }
+      .risk.mid { background: #f2e7d1; color: #745116; }
+      .risk.high { background: #f2e2e4; color: #854a53; }
+      .kind { background: #e7efe0; color: #315f49; }
+
+      .workflow {
+        display: grid;
+        gap: 0.7rem;
+      }
+
+      .step {
+        align-items: center;
+        background: #fffdf8;
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--forest);
+        border-radius: 8px;
+        color: inherit;
+        cursor: pointer;
+        display: grid;
+        gap: 0.2rem;
+        grid-template-columns: 2.3rem minmax(0, 1fr);
+        padding: 0.85rem;
+        text-align: left;
+        width: 100%;
+      }
+
+      .step:hover, .step.active {
+        background: #eef5ea;
+        border-color: var(--forest);
+      }
+
+      .step.ai { border-left-color: var(--blue); }
+      .step.ui { border-left-color: var(--gold); }
+      .step.data { border-left-color: var(--violet); }
+      .step.output { border-left-color: var(--rose); }
+
+      .num {
+        align-items: center;
+        background: #edf0e8;
+        border-radius: 50%;
+        color: var(--forest);
+        display: flex;
+        font-weight: 900;
+        height: 2rem;
+        justify-content: center;
+        width: 2rem;
+      }
+
+      .step strong { display: block; line-height: 1.25; }
+      .step span { color: var(--muted); font-size: 0.92rem; }
+
+      .detail {
+        min-height: 23rem;
+        position: sticky;
+        top: 4.7rem;
+      }
+
+      .detail-list {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 0.85rem;
+      }
+
+      .detail-item {
+        background: #f5f6f1;
+        border-left: 3px solid var(--leaf);
+        padding: 0.7rem;
+      }
+
+      .detail-item b {
+        color: #2b4f3d;
+        display: block;
+        margin-bottom: 0.15rem;
+      }
+
+      .dataflow {
+        display: grid;
+        gap: 0.8rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .flow-box {
+        box-shadow: none;
+        min-height: 9rem;
+        padding: 1rem;
+        position: relative;
+      }
+
+      .flow-box::after {
+        color: var(--leaf);
+        content: ">";
+        font-size: 1.8rem;
+        font-weight: 900;
+        position: absolute;
+        right: -0.65rem;
+        top: 42%;
+      }
+
+      .flow-box:last-child::after { content: ""; }
+      .flow-box b { color: var(--forest); display: block; }
+      .flow-box small { color: var(--muted); display: block; margin-top: 0.35rem; }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th, td {
+        border-bottom: 1px solid var(--line);
+        padding: 0.75rem;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th { background: #edf0e8; color: #243b32; }
+
+      .meter {
+        background: #e9ece5;
+        border-radius: 999px;
+        display: inline-block;
+        height: 0.6rem;
+        overflow: hidden;
+        width: 6rem;
+      }
+
+      .meter span {
+        background: linear-gradient(90deg, var(--leaf), var(--forest));
+        display: block;
+        height: 100%;
+      }
+
+      .reader-layout, .task-finder {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(16rem, 0.34fr) minmax(0, 1fr);
+      }
+
+      select {
+        background: #fffdf8;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        font: inherit;
+        padding: 0.6rem;
+        width: 100%;
+      }
+
+      .code-outline, .def-list {
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .code-block {
+        border-left: 5px solid var(--blue);
+        box-shadow: none;
+        padding: 1rem;
+      }
+
+      .code-block header {
+        align-items: center;
+        background: transparent;
+        color: var(--ink);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        justify-content: space-between;
+        padding: 0;
+      }
+
+      .code-lines {
+        color: var(--blue);
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.86rem;
+        font-weight: 900;
+      }
+
+      .def-card {
+        background: #f8faf5;
+        border: 1px solid var(--line);
+        border-left: 5px solid var(--forest);
+        border-radius: 8px;
+        padding: 0.85rem;
+      }
+
+      .def-card h3 {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+
+      .code-meta {
+        color: var(--muted);
+        display: grid;
+        gap: 0.25rem;
+        margin-top: 0.55rem;
+      }
+
+      .json {
+        background: #17221f;
+        border-radius: 8px;
+        color: #e9f2e6;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.88rem;
+        overflow: auto;
+        padding: 1rem;
+        white-space: pre;
+      }
+
+      @media (max-width: 900px) {
+        .two, .three, .dataflow, .reader-layout, .task-finder {
+          grid-template-columns: 1fr;
+        }
+        .detail { min-height: auto; position: static; }
+        .flow-box::after {
+          bottom: -1rem;
+          right: 1rem;
+          top: auto;
+          transform: rotate(90deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">互動式規格說明書</div>
+      <h1>景觀植物 AI 系統</h1>
+      <p>
+        這份文件以最新分檔後的專案為準。主程式在 <code>景觀植物AI系統/</code>，舊路徑集中在 <code>舊版相容/</code>，根目錄檔案只負責啟動。
+      </p>
+      <span class="path">.\.venv\Scripts\python.exe -m streamlit run .\landscape_matrix_query.py</span>
+    </header>
+
+    <main>
+      <nav class="tabs" aria-label="規格書分頁">
+        <button class="tab active" data-view="overview">總覽</button>
+        <button class="tab" data-view="workflow">邏輯流程</button>
+        <button class="tab" data-view="dataflow">資料流</button>
+        <button class="tab" data-view="files">檔案協作</button>
+        <button class="tab" data-view="filters">Filter 解析</button>
+        <button class="tab" data-view="reader">逐段讀 Code</button>
+        <button class="tab" data-view="change">修改導航</button>
+        <button class="tab" data-view="legacy">舊版相容</button>
+        <button class="tab" data-view="run">啟動與測試</button>
+      </nav>
+
+      <section class="view active" id="overview">
+        <div class="grid three">
+          <article class="card">
+            <b>這個程式在做什麼</b>
+            使用者用自然語言描述景觀植物需求，系統把文字轉成搜尋條件，從植物矩陣篩選候選植物，再用 AI 產生推薦說明或景觀提案。
+          </article>
+          <article class="card">
+            <b>現在的主架構</b>
+            新主程式在 <code>景觀植物AI系統/</code>。資料夾名稱對應責任：設定、資料、查詢、推薦、AI回答、介面。
+          </article>
+          <article class="card">
+            <b>重要分工</b>
+            Python 負責資料載入、正規化、filter、搜尋、排序、驗證。AI 負責解析模糊語意與產生 grounded answer。Streamlit 負責互動介面。
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="workflow">
+        <div class="legend">
+          <span class="pill ui">UI</span>
+          <span class="pill data">資料</span>
+          <span class="pill ai">AI</span>
+          <span class="pill output">輸出</span>
+        </div>
+        <div class="grid two">
+          <div class="workflow" id="workflow-list"></div>
+          <aside class="panel detail" id="workflow-detail" aria-live="polite"></aside>
+        </div>
+      </section>
+
+      <section class="view" id="dataflow">
+        <div class="panel">
+          <h2>資料從哪裡來，往哪裡去</h2>
+          <div class="dataflow">
+            <div class="flow-box"><b>.env / credentials</b><small>由 <code>設定/settings.py</code> 讀取 OpenAI key、Google Sheet id、service account 路徑。</small></div>
+            <div class="flow-box"><b>Google Sheets / CSV</b><small><code>資料/matrix_loader.py</code> 優先讀 Google Sheets，失敗時讀本地 CSV fallback。</small></div>
+            <div class="flow-box"><b>DataFrame 正規化</b><small><code>資料/normalizer.py</code> 處理 boolean、月份欄位、多值顏色、plant_id 字串。</small></div>
+            <div class="flow-box"><b>UI filter options</b><small>從資料中產生 sidebar 可選的植物型態、花色、果色、葉色。</small></div>
+            <div class="flow-box"><b>使用者問題</b><small><code>介面/streamlit_app.py</code> 收自然語言問題與手動 filter。</small></div>
+            <div class="flow-box"><b>Filter 合併</b><small><code>查詢/filters.py</code> 合併 known、AI、manual filters。</small></div>
+            <div class="flow-box"><b>搜尋與推薦</b><small><code>查詢/search.py</code> 篩資料，<code>推薦/scoring.py</code> 排序與選推薦。</small></div>
+            <div class="flow-box"><b>AI 與畫面</b><small><code>AI回答/</code> 產生回答，<code>介面/</code> 顯示卡片、矩陣、圖表。</small></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="files">
+        <div class="panel">
+          <h2>檔案協作程度</h2>
+          <table>
+            <thead><tr><th>檔案</th><th>角色</th><th>協作程度</th><th>改它會影響什麼</th></tr></thead>
+            <tbody>
+              <tr><td><code>landscape_matrix_query.py</code></td><td>啟動入口</td><td><span class="meter"><span style="width:25%"></span></span></td><td>只負責呼叫 <code>景觀植物AI系統/介面/streamlit_app.py</code>。</td></tr>
+              <tr><td><code>景觀植物AI系統/介面/streamlit_app.py</code></td><td>真正 UI 主流程</td><td><span class="meter"><span style="width:100%"></span></span></td><td>Streamlit 畫面、問題輸入、filter 流程、AI 回答流程、結果渲染。</td></tr>
+              <tr><td><code>景觀植物AI系統/設定/settings.py</code></td><td>設定</td><td><span class="meter"><span style="width:55%"></span></span></td><td>.env、merged matrix Sheet 設定、proxy helper。</td></tr>
+              <tr><td><code>景觀植物AI系統/資料/matrix_loader.py</code></td><td>資料載入</td><td><span class="meter"><span style="width:75%"></span></span></td><td>Google Sheets、CSV fallback、資料來源標籤。</td></tr>
+              <tr><td><code>景觀植物AI系統/資料/normalizer.py</code></td><td>資料正規化</td><td><span class="meter"><span style="width:85%"></span></span></td><td>欄位清理、boolean 轉換、多值文字、filter options。</td></tr>
+              <tr><td><code>景觀植物AI系統/查詢/schema.py</code></td><td>常數與詞庫</td><td><span class="meter"><span style="width:80%"></span></span></td><td>月份、filter schema、權重、顏色別名、設計風格詞庫。</td></tr>
+              <tr><td><code>景觀植物AI系統/查詢/filters.py</code></td><td>自然語言轉 filter</td><td><span class="meter"><span style="width:95%"></span></span></td><td>known filters、AI filters、manual filters 合併。</td></tr>
+              <tr><td><code>景觀植物AI系統/查詢/search.py</code></td><td>DataFrame 搜尋</td><td><span class="meter"><span style="width:90%"></span></span></td><td>真正搜尋條件命中與 relaxed candidates。</td></tr>
+              <tr><td><code>景觀植物AI系統/推薦/scoring.py</code></td><td>評分與選推薦</td><td><span class="meter"><span style="width:92%"></span></span></td><td>match_score、match_reasons、景觀配置分層選擇。</td></tr>
+              <tr><td><code>景觀植物AI系統/AI回答/context.py</code></td><td>AI context</td><td><span class="meter"><span style="width:70%"></span></span></td><td>決定 AI 看到哪些候選植物欄位。</td></tr>
+              <tr><td><code>景觀植物AI系統/AI回答/generator.py</code></td><td>AI prompt 與驗證</td><td><span class="meter"><span style="width:95%"></span></span></td><td>一般回答、景觀提案、plant_id 驗證。</td></tr>
+              <tr><td><code>景觀植物AI系統/介面/charts.py</code></td><td>圖表資料</td><td><span class="meter"><span style="width:70%"></span></span></td><td>12 月觀賞矩陣、月份覆蓋分析。</td></tr>
+              <tr><td><code>舊版相容/</code></td><td>舊路徑封存</td><td><span class="meter"><span style="width:20%"></span></span></td><td>保留舊 import 參考，不作為主動開發位置。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="filters">
+        <div class="grid two">
+          <div class="panel">
+            <h2>使用者輸入如何變成搜尋 filter</h2>
+            <p>實際搜尋不直接交給 AI。系統先用本地規則抓明確條件，再用 AI 補語意，最後讓 sidebar 手動條件覆蓋。</p>
+            <div class="workflow">
+              <button class="step active" data-filter="known"><span class="num">1</span><span><strong>known_filters</strong><span>本地規則解析明確詞。</span></span></button>
+              <button class="step ai" data-filter="ai"><span class="num">2</span><span><strong>ai_filters</strong><span>OpenAI 補足模糊意圖。</span></span></button>
+              <button class="step ui" data-filter="manual"><span class="num">3</span><span><strong>manual_filters</strong><span>Sidebar 手動條件最高優先。</span></span></button>
+              <button class="step output" data-filter="applied"><span class="num">4</span><span><strong>applied_filters</strong><span>真正送進搜尋的條件。</span></span></button>
+            </div>
+          </div>
+          <aside class="panel detail" id="filter-detail" aria-live="polite"></aside>
+        </div>
+      </section>
+
+      <section class="view" id="reader">
+        <div class="reader-layout">
+          <aside class="panel">
+            <h2>選一個檔案</h2>
+            <p>這裡按照目前新分檔後的檔案，從第一行到最後一行切段。DEF 說明會嵌在所屬段落內。</p>
+            <select id="reader-select" aria-label="選擇要閱讀的檔案"></select>
+            <div class="detail-list">
+              <div class="detail-item"><b>建議閱讀順序</b>先讀 <code>介面/streamlit_app.py</code>，再讀 <code>查詢/filters.py</code>、<code>查詢/search.py</code>、<code>推薦/scoring.py</code>、<code>AI回答/generator.py</code>。</div>
+              <div class="detail-item"><b>行號提醒</b>行號依目前程式碼產生。之後改程式時，這份規格書也要更新。</div>
+            </div>
+          </aside>
+          <div class="panel">
+            <h2 id="reader-title">逐段讀 Code</h2>
+            <p id="reader-summary"></p>
+            <div class="code-outline" id="reader-outline"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="change">
+        <div class="panel">
+          <h2>修改任務導航</h2>
+          <p>選一個你想改的方向，下面會顯示主要檔案與要注意的函式。</p>
+          <div class="task-finder">
+            <select id="task-select" aria-label="選擇修改任務"></select>
+            <div class="card" id="task-detail"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="legacy">
+        <div class="panel">
+          <h2>舊版相容說明</h2>
+          <div class="grid three">
+            <article class="card"><b>新主程式</b><code>景觀植物AI系統/</code> 是現在要維護的主要程式碼。</article>
+            <article class="card"><b>舊路徑封存</b><code>舊版相容/matrix_question_app/</code> 保留舊 import 的參考，不建議主動修改。</article>
+            <article class="card"><b>測試位置</b><code>測試歸檔/</code> 集中保存舊測試；平常啟動 app 不需要進入測試資料夾。</article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="run">
+        <div class="panel">
+          <h2>啟動與測試</h2>
+          <div class="detail-list">
+            <div class="detail-item"><b>啟動 Streamlit</b><code>.\.venv\Scripts\python.exe -m streamlit run .\landscape_matrix_query.py</code></div>
+            <div class="detail-item"><b>啟動流程</b><code>landscape_matrix_query.py</code> -> <code>景觀植物AI系統/介面/streamlit_app.py</code></div>
+            <div class="detail-item"><b>核心測試</b><code>.\.venv\Scripts\python.exe -m unittest discover -s 測試歸檔\tests</code></div>
+            <div class="detail-item"><b>查詢測試</b><code>.\.venv\Scripts\python.exe -m unittest discover -s 測試歸檔\matrix_question_app_tests</code></div>
+            <div class="detail-item"><b>編譯檢查</b><code>.\.venv\Scripts\python.exe -m compileall landscape_matrix_query.py 景觀植物AI系統 舊版相容 工具 資料腳本</code></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const workflowSteps = [
+        {id:"entry", type:"ui", title:"啟動入口", short:"根目錄入口檔只呼叫 render_app。", file:"landscape_matrix_query.py", funcs:"main guard", input:"Streamlit 指令", output:"啟動主 UI", note:"入口檔很薄，避免同名檔混淆。"},
+        {id:"load", type:"data", title:"載入矩陣資料", short:"讀 Google Sheets 或 CSV fallback。", file:"景觀植物AI系統/資料/matrix_loader.py", funcs:"load_matrix()", input:".env、service account、Sheet id", output:"matrix_df, source", note:"資料來源壞掉時會影響整個 app。"},
+        {id:"normalize", type:"data", title:"資料正規化", short:"整理 boolean、月份欄位、多值文字。", file:"景觀植物AI系統/資料/normalizer.py", funcs:"normalize_matrix_data(), build_filter_options()", input:"raw DataFrame", output:"normalized DataFrame, options", note:"Sheet 欄位改動時先看這裡。"},
+        {id:"known", type:"data", title:"本地規則解析", short:"解析明確月份、顏色、植物類型、設計風格。", file:"景觀植物AI系統/查詢/filters.py", funcs:"extract_known_filters()", input:"question, options", output:"known_filters", note:"可預測詞彙用程式處理，比 AI 穩。"},
+        {id:"ai", type:"ai", title:"AI 解析語意", short:"OpenAI 把模糊意圖轉成 JSON filters。", file:"景觀植物AI系統/查詢/filters.py", funcs:"parse_question_to_filters()", input:"question, api_key, model", output:"ai_filters", note:"只解析意圖，不直接查資料。"},
+        {id:"merge", type:"data", title:"合併 filters", short:"known、AI、manual filters 變成 applied_filters。", file:"景觀植物AI系統/查詢/filters.py", funcs:"merge_known_and_ai_filters(), merge_ai_and_manual_filters()", input:"known, ai, manual", output:"applied_filters", note:"manual_filters 優先權最高。"},
+        {id:"search", type:"data", title:"搜尋候選植物", short:"用 Pandas 套用 applied_filters。", file:"景觀植物AI系統/查詢/search.py", funcs:"apply_filters(), find_relaxed_candidates()", input:"matrix_df, filters", output:"candidates", note:"搜尋結果怪怪的，第一個看這裡。"},
+        {id:"score", type:"data", title:"排序與選推薦", short:"計算 match_score 並選出推薦植物。", file:"景觀植物AI系統/推薦/scoring.py", funcs:"score_candidates(), select_recommendations()", input:"candidates, filters", output:"selected plants", note:"景觀配置模式會嘗試選出不同層次。"},
+        {id:"answer", type:"ai", title:"產生 grounded answer", short:"只把候選植物 context 給 AI。", file:"景觀植物AI系統/AI回答/generator.py", funcs:"generate_grounded_answer(), generate_design_proposal()", input:"question, filters, candidate_context", output:"answer 或 proposal", note:"避免 AI 推薦資料庫不存在的植物。"},
+        {id:"render", type:"output", title:"渲染結果", short:"顯示植物卡片、矩陣、覆蓋圖。", file:"景觀植物AI系統/介面/streamlit_app.py", funcs:"render_results()", input:"matrix_result", output:"Streamlit 畫面", note:"改使用者看到的結果頁，主要改這裡。"}
+      ];
+
+      const filterDetails = {
+        known: {title:"known_filters", body:"由本地規則產生，負責月份、季節、花果葉、顏色、植物類型、設計風格等明確條件。", json:{months:[6,7,8], ornamental_parts:["花"], flower_colors:["粉紅"], requires_composition:true}},
+        ai: {title:"ai_filters", body:"由 OpenAI 產生，負責補充模糊語意，例如全年觀賞、季節變化、配置需求。", json:{requires_year_round_interest:false, requires_seasonal_change:true, requested_count:8, user_intent_summary:"夏季粉紅花且可做景觀配置"}},
+        manual: {title:"manual_filters", body:"由 sidebar 產生，使用者手動選的條件最高優先。", json:{plant_types:["灌木"], exclude_needs_review:true, requested_count:10, response_mode:"景觀提案"}},
+        applied: {title:"applied_filters", body:"真正送進 apply_filters() 的最終搜尋條件。", json:{months:[6,7,8], ornamental_parts:["花"], plant_types:["灌木"], flower_colors:["粉紅"], requires_composition:true, exclude_needs_review:true, requested_count:10}}
+      };
+
+      const codeWalkthrough = [
+        {
+          file:"景觀植物AI系統/介面/streamlit_app.py",
+          summary:"真正的 Streamlit UI 主流程，負責把設定、資料、查詢、推薦、AI回答與結果顯示串起來。",
+          blocks:[
+            {lines:"1-48", title:"imports 與全域常數", risk:"mid", purpose:"載入 Streamlit、Pandas、Altair 與新分層模組，設定查詢版本與範例問題。", input:"Python import path", output:"UI 可用的功能函式與常數", relation:"連接所有新 package 模組。", defs:[]},
+            {lines:"51-56", title:"資料設定 wrapper", risk:"low", purpose:"保留 UI 內簡短 wrapper，轉呼叫設定與資料模組。", input:"無", output:"settings 或 matrix_df", relation:"真正邏輯在 設定/settings.py 與 資料/matrix_loader.py。", defs:[
+              {name:"load_matrix_settings()", kind:"設定", purpose:"轉呼叫新設定模組取得 merged matrix 設定。", calledBy:"render_app()", changes:"通常不用改，改設定請去 設定/settings.py。"},
+              {name:"load_matrix()", kind:"資料", purpose:"轉呼叫新資料模組載入矩陣。", calledBy:"render_app()", changes:"通常不用改，改資料來源請去 資料/matrix_loader.py。"}
+            ]},
+            {lines:"59-84", title:"sidebar filter UI", risk:"mid", purpose:"產生月份、花果葉、植物類型、顏色、confidence、回答模式等手動篩選。", input:"filter options", output:"manual_filters dict", relation:"manual_filters 會覆蓋 AI 與本地解析。", defs:[
+              {name:"render_filters(options)", kind:"UI", purpose:"建立 sidebar 手動篩選器。", calledBy:"render_app()", changes:"新增手動 filter 時要同步改 查詢/filters.py 或 查詢/search.py。"}
+            ]},
+            {lines:"87-144", title:"結果顯示 helper", risk:"mid", purpose:"顯示植物卡片、設計提案表、applied_filters 白話摘要。", input:"selected df、roles、filters", output:"Streamlit 元件或 DataFrame", relation:"只處理畫面資料整理，不負責搜尋。", defs:[
+              {name:"render_plant_cards(df, roles=None)", kind:"UI", purpose:"逐株顯示推薦植物卡。", calledBy:"render_results()", changes:"改植物卡片內容時改這裡。"},
+              {name:"build_proposal_overview(df, roles)", kind:"UI 資料", purpose:"把設計提案整理成表格。", calledBy:"render_results()", changes:"改提案摘要欄位時改這裡。"},
+              {name:"describe_applied_filters(filters)", kind:"UI 文字", purpose:"把 JSON filter 轉成白話摘要。", calledBy:"render_results()", changes:"改 filter 顯示文字時改這裡。"}
+            ]},
+            {lines:"147-199", title:"結果渲染", risk:"high", purpose:"顯示 AI 回答、提案表、查詢依據、指標、植物卡片、12 月矩陣、月份覆蓋圖。", input:"matrix_result dict", output:"Streamlit 結果區", relation:"依賴 AI回答、介面/charts 與推薦資料 schema。", defs:[
+              {name:"render_results(result)", kind:"UI 主結果", purpose:"集中渲染使用者看到的結果。", calledBy:"render_app()", changes:"改結果頁時主要改這裡。"}
+            ]},
+            {lines:"202-279", title:"主流程 render_app", risk:"high", purpose:"載入資料、收問題、解析 filter、搜尋排序、呼叫 AI、寫 session_state、渲染結果。", input:"使用者問題、sidebar、Google Sheets、OpenAI", output:"Streamlit app 畫面", relation:"整個 app 的中樞。", defs:[
+              {name:"render_app()", kind:"主流程", purpose:"把所有分層模組串成完整 app。", calledBy:"入口檔 landscape_matrix_query.py", changes:"流程級修改風險最高。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/資料/normalizer.py",
+          summary:"資料清理與 filter options 建立。Google Sheet 欄位或資料格式改變時先看這裡。",
+          blocks:[
+            {lines:"1-7", title:"imports", risk:"low", purpose:"載入 re、pandas 與查詢 schema 常數。", input:"無", output:"模組依賴", relation:"依賴 查詢/schema.py。", defs:[]},
+            {lines:"10-32", title:"基礎清理 helper", risk:"mid", purpose:"處理空值、boolean、多值文字與顏色別名。", input:"任意值或多值文字", output:"字串、boolean、list", relation:"被 filter、search、scoring 大量使用。", defs:[
+              {name:"as_text(value)", kind:"清理", purpose:"安全轉成去空白字串。", calledBy:"多數模組", changes:"基礎工具，改動影響廣。"},
+              {name:"normalize_boolean(value)", kind:"清理", purpose:"把 TRUE/1/yes/on 轉成 boolean。", calledBy:"normalizer、search、charts", changes:"Sheet boolean 寫法改變時改。"},
+              {name:"normalize_multivalue_text(value)", kind:"清理", purpose:"拆分多值欄位並套用顏色別名。", calledBy:"filter options、search、scoring", changes:"顏色比對問題常看這裡。"}
+            ]},
+            {lines:"35-71", title:"矩陣正規化與選項", risk:"high", purpose:"整理 raw DataFrame，補月份欄位，建立 sidebar options。", input:"raw DataFrame", output:"normalized DataFrame、options", relation:"資料載入後第一個核心處理。", defs:[
+              {name:"normalize_matrix_data(df)", kind:"資料正規化", purpose:"把矩陣整理成查詢格式。", calledBy:"資料/matrix_loader.py", changes:"欄位結構改動時最重要。"},
+              {name:"extract_filter_options(df, column)", kind:"選項", purpose:"從欄位拆出可選值。", calledBy:"build_filter_options()", changes:"多值欄位邏輯會影響 sidebar。"},
+              {name:"build_filter_options(df)", kind:"選項", purpose:"產生植物類型、型態、花色、果色、葉色選項。", calledBy:"streamlit_app.render_app()", changes:"新增 sidebar options 時改。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/查詢/filters.py",
+          summary:"使用者輸入轉 filter 的核心。這裡決定自然語言怎麼變成 applied_filters。",
+          blocks:[
+            {lines:"1-19", title:"imports 與 schema", risk:"low", purpose:"載入 json、re、OpenAI、normalizer 與 filter schema。", input:"無", output:"解析工具可用", relation:"依賴 資料/normalizer.py 與 查詢/schema.py。", defs:[]},
+            {lines:"22-77", title:"本地規則解析", risk:"high", purpose:"解析月份、季節、花果葉、植物類型、顏色、設計風格與未驗證詞。", input:"question、options", output:"known_filters", relation:"本地規則優先於 AI。", defs:[
+              {name:"_months_from_question(question)", kind:"解析", purpose:"解析月份、區間、季節詞。", calledBy:"extract_known_filters()", changes:"支援新月份說法時改。"},
+              {name:"extract_known_filters(question, options)", kind:"解析", purpose:"用 deterministic 規則產生 known_filters。", calledBy:"streamlit_app.render_app()", changes:"自然語言規則主要改這裡。"}
+            ]},
+            {lines:"80-152", title:"AI 解析與 filter 合併", risk:"high", purpose:"合併 known/AI/manual filters，並要求 OpenAI 輸出 JSON filters。", input:"question、ai response、manual filters", output:"applied_filters", relation:"manual > known > ai > default。", defs:[
+              {name:"merge_known_and_ai_filters(ai_filters, known_filters)", kind:"合併", purpose:"本地規則覆蓋 AI。", calledBy:"render_app()", changes:"改優先權時改。"},
+              {name:"_parse_json(raw_text, fallback)", kind:"AI 清理", purpose:"從 AI 文字中解析 JSON。", calledBy:"parse_question_to_filters(), generator", changes:"AI JSON 解析問題看這裡。"},
+              {name:"parse_question_to_filters(question, api_key, model, client=None)", kind:"AI 解析", purpose:"請 OpenAI 產生 filter JSON。", calledBy:"render_app()", changes:"改 prompt 或 filter schema 時改。"},
+              {name:"merge_ai_and_manual_filters(ai_filters, manual_filters)", kind:"合併", purpose:"manual filters 最後覆蓋。", calledBy:"render_app()", changes:"改 sidebar 優先權時改。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/查詢/search.py",
+          summary:"真正用 Pandas 對矩陣搜尋，並在無結果時提供近似候選。",
+          blocks:[
+            {lines:"1-27", title:"搜尋 helper", risk:"mid", purpose:"處理多值欄位命中與月份花果葉命中。", input:"row、filters", output:"boolean", relation:"apply_filters 的基礎。", defs:[
+              {name:"_row_matches_values(value, choices)", kind:"搜尋 helper", purpose:"判斷多值欄位是否命中。", calledBy:"apply_filters(), scoring", changes:"顏色或型態比對會受影響。"},
+              {name:"_month_match(row, months, parts)", kind:"搜尋 helper", purpose:"判斷指定月份是否有花果葉觀賞性。", calledBy:"apply_filters()", changes:"月份條件邏輯改這裡。"}
+            ]},
+            {lines:"30-84", title:"套用 filter 與 relaxed search", risk:"high", purpose:"把 applied_filters 實際套到 DataFrame，無結果時放寬一個條件。", input:"df、filters", output:"filtered df 或 relaxed candidates", relation:"搜尋結果是否正確取決於這裡。", defs:[
+              {name:"apply_filters(df, filters)", kind:"搜尋", purpose:"真正篩選植物矩陣。", calledBy:"render_app(), find_relaxed_candidates()", changes:"搜尋行為核心。"},
+              {name:"find_relaxed_candidates(df, filters)", kind:"fallback", purpose:"完全沒有結果時找近似結果。", calledBy:"render_app()", changes:"無結果補救策略。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/推薦/scoring.py",
+          summary:"候選植物評分、排序、以及景觀配置模式的推薦選擇。",
+          blocks:[
+            {lines:"1-19", title:"評分 helper", risk:"mid", purpose:"取得活躍月份、palette 命中部位。", input:"row、palette", output:"months 或 parts", relation:"score_candidates 與 select_recommendations 共用。", defs:[
+              {name:"_active_months(row, prefix)", kind:"月份 helper", purpose:"取某 prefix 啟用月份。", calledBy:"score_candidates(), context, charts", changes:"月份欄位改名時改。"},
+              {name:"_palette_parts(row, palette_colors)", kind:"色彩 helper", purpose:"判斷花果葉哪些命中設計 palette。", calledBy:"score_candidates(), select_recommendations()", changes:"配色邏輯改這裡。"}
+            ]},
+            {lines:"22-105", title:"評分與選擇", risk:"high", purpose:"計算 match_score、match_reasons，並依一般或配置模式選植物。", input:"candidate_df、filters", output:"ranked candidates、selected plants", relation:"推薦品質主要由這裡決定。", defs:[
+              {name:"score_candidates(df, filters)", kind:"排序", purpose:"依月份、顏色、型態、confidence、needs_review 算分。", calledBy:"render_app()", changes:"改推薦排序權重時改。"},
+              {name:"_landscape_layer(row)", kind:"配置 helper", purpose:"判斷前景、中層、背景等層次。", calledBy:"select_recommendations()", changes:"景觀分層邏輯改這裡。"},
+              {name:"select_recommendations(candidate_df, filters)", kind:"推薦", purpose:"選出最終推薦植物。", calledBy:"render_app()", changes:"配置結果是否多樣取決於這裡。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/AI回答/generator.py",
+          summary:"AI prompt、一般回答、景觀提案與 plant_id 驗證。",
+          blocks:[
+            {lines:"1-10", title:"imports 與 prompt 常數", risk:"low", purpose:"載入 OpenAI、JSON、regex、schema prompt 常數。", input:"無", output:"AI 生成工具可用", relation:"依賴 查詢/schema.py 與 查詢/filters.py。", defs:[]},
+            {lines:"13-113", title:"AI 回答生成", risk:"high", purpose:"產生一般 grounded answer 或景觀設計提案 JSON。", input:"question、filters、candidate_context、api_key、model", output:"answer text 或 proposal dict", relation:"AI 只能看候選資料 context。", defs:[
+              {name:"generate_grounded_answer(...)", kind:"AI 回答", purpose:"產生一般推薦說明。", calledBy:"render_app()", changes:"改一般回答格式與語氣時改。"},
+              {name:"generate_design_proposal(...)", kind:"AI 提案", purpose:"產生設計提案 JSON。", calledBy:"render_app()", changes:"改設計提案格式與角色時改。"}
+            ]},
+            {lines:"116-152", title:"AI 輸出驗證", risk:"high", purpose:"確保 AI 只能使用候選植物 plant_id，並檢查回答是否提到不存在 ID。", input:"proposal、candidate_df、answer", output:"validated proposal、invalid ids", relation:"避免 AI 亂推薦的重要防線。", defs:[
+              {name:"validate_design_proposal(...)", kind:"驗證", purpose:"過濾 proposal plant_ids 並整理 roles。", calledBy:"render_app()", changes:"AI 提案可信度靠這裡。"},
+              {name:"invalid_answer_plant_ids(answer, candidate_df)", kind:"驗證", purpose:"找出回答裡不存在的 plant_id。", calledBy:"render_app()", changes:"一般回答安全檢查。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/資料/matrix_loader.py",
+          summary:"資料來源入口。優先讀 Google Sheets，失敗時退回本地 CSV。",
+          blocks:[
+            {lines:"1-14", title:"imports 與 fallback 路徑", risk:"low", purpose:"載入 Path、Pandas、Streamlit cache、Google Sheet helper、settings、normalizer。", input:"無", output:"LOCAL_MATRIX_FALLBACK", relation:"依賴 app.py 的 load_google_sheet。", defs:[]},
+            {lines:"17-35", title:"載入矩陣", risk:"high", purpose:"讀 merged matrix 並正規化，失敗時讀本地 CSV。", input:"settings、Google Sheets、CSV", output:"matrix_df, source label", relation:"整個 app 的資料入口。", defs:[
+              {name:"load_matrix()", kind:"資料載入", purpose:"載入並正規化植物矩陣。", calledBy:"streamlit_app.render_app()", changes:"改資料來源或 fallback 策略時改。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/AI回答/context.py",
+          summary:"把候選植物壓成 AI 可讀的 JSON context。",
+          blocks:[
+            {lines:"1-10", title:"imports 與月份格式", risk:"low", purpose:"載入 JSON、normalizer 與 scoring helper，提供月份文字格式。", input:"months", output:"month string", relation:"AI context 的小工具。", defs:[
+              {name:"format_months(months)", kind:"格式", purpose:"把月份 list 轉成字串。", calledBy:"build_ai_context()", changes:"AI context 月份格式。"}
+            ]},
+            {lines:"13-22", title:"建立 AI context", risk:"mid", purpose:"把候選植物欄位與 applied_filters 組成 JSON。", input:"candidate_df、filters、max_rows", output:"JSON string", relation:"generator.py 會把它傳給 OpenAI。", defs:[
+              {name:"build_ai_context(candidate_df, filters, max_rows=20)", kind:"AI context", purpose:"限制 AI 只能看到候選資料。", calledBy:"render_app()", changes:"AI 可用欄位與上下文大小。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/介面/charts.py",
+          summary:"建立結果頁需要的 12 月矩陣與覆蓋分析資料。",
+          blocks:[
+            {lines:"1-28", title:"圖表資料 builder", risk:"mid", purpose:"把 selected plants 轉成季節矩陣與月份覆蓋分析。", input:"candidate_df", output:"DataFrame", relation:"render_results 會用於表格與 Altair 圖表。", defs:[
+              {name:"build_seasonal_matrix(candidate_df)", kind:"表格資料", purpose:"建立 12 月花果葉矩陣。", calledBy:"render_results()", changes:"改矩陣顯示內容時改。"},
+              {name:"build_coverage_analysis(candidate_df)", kind:"圖表資料", purpose:"統計每月花果葉覆蓋。", calledBy:"render_results()", changes:"改覆蓋圖資料時改。"}
+            ]}
+          ]
+        },
+        {
+          file:"景觀植物AI系統/設定/settings.py",
+          summary:"讀取 .env 與 merged matrix 設定，並匯出 legacy app 的共用設定 helper。",
+          blocks:[
+            {lines:"1-5", title:"imports", risk:"low", purpose:"載入 os 與 app.py 既有設定 helper。", input:"環境變數", output:"設定 helper", relation:"目前仍沿用 app.py 的 load_settings。", defs:[]},
+            {lines:"8-17", title:"merged matrix 設定", risk:"mid", purpose:"補上 DISPLAY_MATRIX_MERGED_SPREADSHEET_ID 與 WORKSHEET_NAME。", input:".env", output:"settings dict", relation:"matrix_loader 會使用。", defs:[
+              {name:"load_matrix_settings()", kind:"設定", purpose:"讀取 app 基礎設定並補 merged matrix 設定。", calledBy:"matrix_loader.load_matrix(), streamlit_app", changes:"換 Sheet 或 env var 時改。"}
+            ]}
+          ]
+        }
+      ];
+
+      const tasks = [
+        {label:"我要改 UI", files:["景觀植物AI系統/介面/streamlit_app.py"], funcs:["render_filters()","render_results()","render_app()"], tests:"跑 tests 與手動啟動 Streamlit 看畫面。"},
+        {label:"我要改資料載入", files:["景觀植物AI系統/資料/matrix_loader.py","景觀植物AI系統/設定/settings.py"], funcs:["load_matrix()","load_matrix_settings()"], tests:"跑 connection smoke 或資料載入測試。"},
+        {label:"我要改資料正規化", files:["景觀植物AI系統/資料/normalizer.py"], funcs:["normalize_matrix_data()","normalize_multivalue_text()"], tests:"跑 測試歸檔/matrix_question_app_tests。"},
+        {label:"我要改自然語言規則", files:["景觀植物AI系統/查詢/filters.py"], funcs:["extract_known_filters()","_months_from_question()"], tests:"新增 filter parsing 測試。"},
+        {label:"我要改搜尋邏輯", files:["景觀植物AI系統/查詢/search.py"], funcs:["apply_filters()","find_relaxed_candidates()"], tests:"用小 DataFrame 測命中與無結果 fallback。"},
+        {label:"我要改推薦排序", files:["景觀植物AI系統/推薦/scoring.py"], funcs:["score_candidates()","select_recommendations()"], tests:"確認分數、排序、配置層次。"},
+        {label:"我要改 AI prompt", files:["景觀植物AI系統/AI回答/generator.py"], funcs:["generate_grounded_answer()","generate_design_proposal()"], tests:"保留 prompt contract 與 plant_id 驗證測試。"},
+        {label:"我要改 AI context", files:["景觀植物AI系統/AI回答/context.py"], funcs:["build_ai_context()"], tests:"確認 context row count 與欄位。"},
+        {label:"我要改圖表資料", files:["景觀植物AI系統/介面/charts.py"], funcs:["build_seasonal_matrix()","build_coverage_analysis()"], tests:"確認月份矩陣和覆蓋統計。"}
+      ];
+
+      function showView(id) {
+        document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === id));
+        document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === id));
+      }
+
+      function workflowButton(step, index) {
+        const btn = document.createElement("button");
+        btn.className = `step ${step.type}`;
+        btn.dataset.step = step.id;
+        btn.innerHTML = `<span class="num">${index + 1}</span><span><strong>${step.title}</strong><span>${step.short}</span></span>`;
+        btn.addEventListener("click", () => selectWorkflow(step.id));
+        return btn;
+      }
+
+      function selectWorkflow(id) {
+        const step = workflowSteps.find((item) => item.id === id) || workflowSteps[0];
+        document.querySelectorAll("[data-step]").forEach((btn) => btn.classList.toggle("active", btn.dataset.step === id));
+        document.getElementById("workflow-detail").innerHTML = `
+          <span class="pill ${step.type}">${step.type.toUpperCase()}</span>
+          <h2>${step.title}</h2>
+          <p>${step.short}</p>
+          <div class="detail-list">
+            <div class="detail-item"><b>檔案</b><code>${step.file}</code></div>
+            <div class="detail-item"><b>主要函式</b>${step.funcs}</div>
+            <div class="detail-item"><b>輸入</b>${step.input}</div>
+            <div class="detail-item"><b>輸出</b>${step.output}</div>
+            <div class="detail-item"><b>修改重點</b>${step.note}</div>
+          </div>
+        `;
+      }
+
+      function selectFilter(id) {
+        const item = filterDetails[id] || filterDetails.known;
+        document.querySelectorAll("[data-filter]").forEach((btn) => btn.classList.toggle("active", btn.dataset.filter === id));
+        document.getElementById("filter-detail").innerHTML = `
+          <h2>${item.title}</h2>
+          <p>${item.body}</p>
+          <div class="json">${JSON.stringify(item.json, null, 2)}</div>
+        `;
+      }
+
+      function riskLabel(risk) {
+        if (risk === "high") return "高風險";
+        if (risk === "mid") return "中風險";
+        return "低風險";
+      }
+
+      function renderBlockDefs(defs) {
+        if (!defs || !defs.length) return "";
+        return `
+          <div class="def-list">
+            <h3>這段裡的 DEF</h3>
+            ${defs.map((def) => `
+              <article class="def-card">
+                <h3><code>${def.name}</code><span class="kind">${def.kind}</span></h3>
+                <div class="code-meta">
+                  <div><strong>它在幹嘛：</strong>${def.purpose}</div>
+                  <div><strong>誰會呼叫它：</strong>${def.calledBy}</div>
+                  <div><strong>改它代表：</strong>${def.changes}</div>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      function renderCodeWalkthrough(index) {
+        const item = codeWalkthrough[index] || codeWalkthrough[0];
+        document.getElementById("reader-title").innerHTML = `<code>${item.file}</code>`;
+        document.getElementById("reader-summary").textContent = item.summary;
+        document.getElementById("reader-outline").innerHTML = item.blocks.map((block) => `
+          <article class="code-block">
+            <header>
+              <h3>${block.title}</h3>
+              <span class="code-lines">第 ${block.lines} 行</span>
+            </header>
+            ${renderBlockDefs(block.defs)}
+            <div class="detail-list">
+              <div class="detail-item"><b>目的</b>${block.purpose}</div>
+              <div class="detail-item"><b>輸入</b>${block.input}</div>
+              <div class="detail-item"><b>輸出</b>${block.output}</div>
+              <div class="detail-item"><b>協作關係</b>${block.relation}</div>
+              <div><span class="risk ${block.risk}">${riskLabel(block.risk)}</span></div>
+            </div>
+          </article>
+        `).join("");
+      }
+
+      function renderTask(index) {
+        const task = tasks[index] || tasks[0];
+        document.getElementById("task-detail").innerHTML = `
+          <b>${task.label}</b>
+          <p><strong>主要檔案：</strong>${task.files.map((file) => `<code>${file}</code>`).join(" ")}</p>
+          <p><strong>先看函式：</strong>${task.funcs.map((fn) => `<code>${fn}</code>`).join(" ")}</p>
+          <p><strong>測試提醒：</strong>${task.tests}</p>
+        `;
+      }
+
+      document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => showView(tab.dataset.view)));
+      workflowSteps.forEach((step, index) => document.getElementById("workflow-list").appendChild(workflowButton(step, index)));
+      selectWorkflow("entry");
+
+      document.querySelectorAll("[data-filter]").forEach((btn) => btn.addEventListener("click", () => selectFilter(btn.dataset.filter)));
+      selectFilter("known");
+
+      const readerSelect = document.getElementById("reader-select");
+      codeWalkthrough.forEach((item, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = item.file;
+        readerSelect.appendChild(option);
+      });
+      readerSelect.addEventListener("change", () => renderCodeWalkthrough(Number(readerSelect.value)));
+      renderCodeWalkthrough(0);
+
+      const taskSelect = document.getElementById("task-select");
+      tasks.forEach((task, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = task.label;
+        taskSelect.appendChild(option);
+      });
+      taskSelect.addEventListener("change", () => renderTask(Number(taskSelect.value)));
+      renderTask(0);
+    </script>
+  </body>
+</html>

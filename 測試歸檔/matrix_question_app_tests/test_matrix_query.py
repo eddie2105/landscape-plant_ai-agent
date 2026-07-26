@@ -1,13 +1,39 @@
 import unittest
+from importlib import import_module
 
 import pandas as pd
 
-from matrix_question_app.matrix_query import (
-    DEFAULT_FILTERS, FINAL_REMINDER, apply_filters, build_ai_context, build_seasonal_matrix,
-    extract_known_filters, find_relaxed_candidates, generate_grounded_answer,
-    generate_design_proposal, invalid_answer_plant_ids, merge_ai_and_manual_filters, normalize_boolean, normalize_matrix_data,
-    normalize_multivalue_text, PLANTING_DESIGN_FRAMEWORK, score_candidates, select_recommendations, validate_design_proposal,
+_context = import_module(
+    "\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.AI\u56de\u7b54.context"
 )
+_generator = import_module(
+    "\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.AI\u56de\u7b54.generator"
+)
+_charts = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u4ecb\u9762.charts")
+_scoring = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u63a8\u85a6.scoring")
+_normalizer = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u8cc7\u6599.normalizer")
+_filters = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u67e5\u8a62.filters")
+_schema = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u67e5\u8a62.schema")
+_search = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u67e5\u8a62.search")
+
+DEFAULT_FILTERS = _schema.DEFAULT_FILTERS
+FINAL_REMINDER = _schema.FINAL_REMINDER
+PLANTING_DESIGN_FRAMEWORK = _schema.PLANTING_DESIGN_FRAMEWORK
+apply_filters = _search.apply_filters
+build_ai_context = _context.build_ai_context
+build_seasonal_matrix = _charts.build_seasonal_matrix
+extract_known_filters = _filters.extract_known_filters
+find_relaxed_candidates = _search.find_relaxed_candidates
+generate_grounded_answer = _generator.generate_grounded_answer
+generate_design_proposal = _generator.generate_design_proposal
+invalid_answer_plant_ids = _generator.invalid_answer_plant_ids
+merge_ai_and_manual_filters = _filters.merge_ai_and_manual_filters
+normalize_boolean = _normalizer.normalize_boolean
+normalize_matrix_data = _normalizer.normalize_matrix_data
+normalize_multivalue_text = _normalizer.normalize_multivalue_text
+score_candidates = _scoring.score_candidates
+select_recommendations = _scoring.select_recommendations
+validate_design_proposal = _generator.validate_design_proposal
 
 
 class MatrixQueryTests(unittest.TestCase):

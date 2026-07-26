@@ -1,33 +1,44 @@
 import json
-import os
 import sys
 from pathlib import Path
 
 import altair as alt
-import gspread
 import pandas as pd
 import streamlit as st
 
 # When Streamlit executes this file directly, its folder is first on sys.path.
 # Put the project root first so ``app`` resolves to the preserved legacy app.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if not sys.path or sys.path[0] != str(PROJECT_ROOT):
     if str(PROJECT_ROOT) in sys.path:
         sys.path.remove(str(PROJECT_ROOT))
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import disable_dead_local_proxy, load_google_sheet, load_settings
-from matrix_question_app.matrix_query import (
-    DEFAULT_FILTERS, apply_filters, build_ai_context, build_coverage_analysis,
-    build_filter_options, build_seasonal_matrix, generate_grounded_answer,
-    extract_known_filters, find_relaxed_candidates, merge_ai_and_manual_filters,
-    merge_known_and_ai_filters, normalize_matrix_data, parse_question_to_filters,
-    score_candidates, select_recommendations, generate_design_proposal,
-    invalid_answer_plant_ids, validate_design_proposal,
+from 景觀植物AI系統.AI回答.context import build_ai_context
+from 景觀植物AI系統.AI回答.generator import (
+    generate_design_proposal,
+    generate_grounded_answer,
+    invalid_answer_plant_ids,
+    validate_design_proposal,
+)
+from 景觀植物AI系統.介面.charts import build_coverage_analysis, build_seasonal_matrix
+from 景觀植物AI系統.推薦.scoring import score_candidates, select_recommendations
+from 景觀植物AI系統.查詢.filters import (
+    DEFAULT_FILTERS,
+    extract_known_filters,
+    merge_ai_and_manual_filters,
+    merge_known_and_ai_filters,
+    parse_question_to_filters,
+)
+from 景觀植物AI系統.查詢.search import apply_filters, find_relaxed_candidates
+from 景觀植物AI系統.資料.matrix_loader import load_matrix as _load_matrix
+from 景觀植物AI系統.資料.normalizer import build_filter_options
+from 景觀植物AI系統.設定.settings import (
+    disable_dead_local_proxy,
+    load_matrix_settings as _load_matrix_settings,
 )
 
 
-LOCAL_MATRIX_FALLBACK = Path("data/display_matrix_merged_preview.csv")
 QUERY_LOGIC_VERSION = "2026-07-17-unified-answer-v8"
 EXAMPLE_QUESTIONS = [
     "我想找春天開粉紅花的灌木。",
@@ -38,33 +49,11 @@ EXAMPLE_QUESTIONS = [
 
 
 def load_matrix_settings():
-    settings = load_settings()
-    settings["DISPLAY_MATRIX_MERGED_SPREADSHEET_ID"] = os.getenv(
-        "DISPLAY_MATRIX_MERGED_SPREADSHEET_ID"
-    ) or os.getenv("PLANTS_MERGED_SPREADSHEET_ID")
-    settings["DISPLAY_MATRIX_MERGED_WORKSHEET_NAME"] = os.getenv(
-        "DISPLAY_MATRIX_MERGED_WORKSHEET_NAME", "display_matrix_merged"
-    )
-    return settings
+    return _load_matrix_settings()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
 def load_matrix():
-    settings = load_matrix_settings()
-    try:
-        if not settings["DISPLAY_MATRIX_MERGED_SPREADSHEET_ID"]:
-            raise RuntimeError("未設定 merged matrix 的 spreadsheet id")
-        raw = load_google_sheet(
-            settings["DISPLAY_MATRIX_MERGED_SPREADSHEET_ID"],
-            settings["DISPLAY_MATRIX_MERGED_WORKSHEET_NAME"],
-            settings["GOOGLE_SERVICE_ACCOUNT_FILE"],
-        )
-        return normalize_matrix_data(raw), "Google Sheets API"
-    except Exception as exc:
-        if not LOCAL_MATRIX_FALLBACK.exists():
-            raise RuntimeError("Google Sheet 讀取失敗，且找不到本機 CSV 備援資料。") from exc
-        raw = pd.read_csv(LOCAL_MATRIX_FALLBACK, dtype={"plant_id": str})
-        return normalize_matrix_data(raw), "本機 CSV 備援（Google Sheet 讀取失敗）"
+    return _load_matrix()
 
 
 def render_filters(options):

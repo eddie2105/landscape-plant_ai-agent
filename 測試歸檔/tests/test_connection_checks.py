@@ -18,7 +18,7 @@ class ConnectionChecksTests(unittest.TestCase):
             },
             clear=True,
         ):
-            from connection_checks import load_settings, public_settings_summary
+            from 工具.connection_checks import load_settings, public_settings_summary
 
             settings = load_settings()
             summary = public_settings_summary(settings)
@@ -29,7 +29,7 @@ class ConnectionChecksTests(unittest.TestCase):
         self.assertNotIn("sk-test-secret", str(summary))
 
     def test_find_missing_settings_reports_empty_required_values(self):
-        from connection_checks import find_missing_settings
+        from 工具.connection_checks import find_missing_settings
 
         missing = find_missing_settings(
             {
@@ -49,7 +49,7 @@ class ConnectionChecksTests(unittest.TestCase):
         )
 
     def test_check_google_sheets_reads_both_configured_worksheets(self):
-        from connection_checks import check_google_sheets
+        from 工具.connection_checks import check_google_sheets
 
         client = Mock()
         plants_sheet = client.open_by_key.return_value
@@ -78,7 +78,7 @@ class ConnectionChecksTests(unittest.TestCase):
         client.open_by_key.assert_any_call("display-id")
 
     def test_check_openai_lists_models_without_returning_secret(self):
-        from connection_checks import check_openai
+        from 工具.connection_checks import check_openai
 
         openai_client = Mock()
         openai_client.models.list.return_value.data = [Mock(id="gpt-4.1-mini")]

@@ -12,6 +12,8 @@ credentials/
 *.key
 *service_account*.json
 *credentials*.json
+*.p12
+*.p8
 
 # Python cache and build output
 __pycache__/
@@ -25,12 +27,19 @@ dist/
 *.egg-info/
 
 # Local app/runtime files
+.agents/
+.codex/
 .superpowers/
 .streamlit/secrets.toml
 data/
+本機歸檔/
+docs/superpowers/
 *.log
 *.sqlite
 *.sqlite3
+*.csv
+*.xlsx
+*.xls
 
 # OS and editor files
 .DS_Store

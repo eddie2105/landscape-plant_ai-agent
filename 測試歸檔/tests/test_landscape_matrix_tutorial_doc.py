@@ -20,9 +20,9 @@ class LandscapeMatrixTutorialDocTests(unittest.TestCase):
         html = Path("docs/landscape-matrix-query-tutorial.html").read_text(encoding="utf-8")
         for text in (
             "landscape_matrix_query.py:1-7",
-            "matrix_question_app/landscape_matrix_query.py:213-293",
+            "舊版相容/matrix_question_app/landscape_matrix_query.py:213-293",
             "matrix_query.py:519-563",
-            "matrix_question_app/tests/test_matrix_query.py:1-206",
+            "測試歸檔/matrix_question_app_tests/test_matrix_query.py:1-206",
             "Source lines",
             "在幹嘛",
             "誰呼叫它",

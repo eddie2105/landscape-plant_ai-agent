@@ -1,6 +1,6 @@
-"""Convenient Streamlit entry point for the merged seasonal matrix app."""
+"""Convenient Streamlit entry point for the landscape plant AI system."""
 
-from matrix_question_app.landscape_matrix_query import render_app
+from 景觀植物AI系統.介面.streamlit_app import render_app
 
 
 if __name__ == "__main__":
