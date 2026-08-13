@@ -122,6 +122,27 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
     return _parse_json(response.output_text, {})
 
 
+def generate_design_interpretation(question, composition, api_key, model, client=None):
+    """Write only a cautious design reading; Python renders all plant facts."""
+    prompt_data = {key: value for key, value in (composition or {}).items() if key != "selected"}
+    prompt = """你是景觀植栽設計助理。請以台灣繁體中文撰寫設計解讀，且不要自行加上「設計解讀」標題，
+只說明系統已確定的角色如何形成視覺層次、主從關係、群植或帶狀配置的方向。
+必須先用一段話說明整體主從關係，再以「各植物協作」小節逐一列出系統固定配置中的每一株中文名、固定角色、selection_evidence 欄的資料依據，以及 collaboration 欄提供的協作方式。植物名稱、角色、資料依據與協作方式不可遺漏、替換或改寫成其他植物事實。
+不得加入學名、plant_id、月份、花果葉顏色、信心程度或 needs_review；這些事實由系統表格固定呈現。
+不得新增任何植物事實，也不得宣稱適合庭院、可靠、完整、全期覆蓋、已確立、耐旱、日照、香氣、生態功能、株距或成株尺度。
+不可把使用者的季節需求說成每株植物都已涵蓋該期間；各植物實際月份以系統表格為準。不可把依型態推定的高、中、低層或主從關係說成資料表已證實的事實。
+若有缺層或資料限制，請以「候選資料仍需現地確認」的保守方式說明。只輸出 Markdown 文字，不要 JSON。"""
+    response = (client or OpenAI(api_key=api_key)).responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"使用者需求：{question}\n系統固定配置：{json.dumps(prompt_data, ensure_ascii=False)}"},
+        ],
+        timeout=45,
+    )
+    return as_text(response.output_text)
+
+
 def validate_design_proposal(proposal, candidate_df, fallback_df, requested_count):
     known_ids = {as_text(value) for value in candidate_df.get("plant_id", [])}
     requested_ids = proposal.get("plant_ids", []) if isinstance(proposal, dict) else []
@@ -174,6 +195,7 @@ __all__ = [
     "FINAL_REMINDER",
     "PLANTING_DESIGN_FRAMEWORK",
     "generate_design_proposal",
+    "generate_design_interpretation",
     "generate_grounded_answer",
     "answer_uses_exact_composition",
     "invalid_answer_plant_ids",

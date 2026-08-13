@@ -16,11 +16,9 @@ if not sys.path or sys.path[0] != str(PROJECT_ROOT):
 
 from 景觀植物AI系統.AI回答.context import build_ai_context
 from 景觀植物AI系統.AI回答.generator import (
-    answer_uses_exact_composition,
-    generate_design_proposal,
+    generate_design_interpretation,
     generate_grounded_answer,
     invalid_answer_plant_ids,
-    validate_design_proposal,
 )
 from 景觀植物AI系統.介面.charts import build_coverage_analysis, build_seasonal_matrix
 from 景觀植物AI系統.推薦.scoring import score_candidates, select_recommendations
@@ -31,6 +29,7 @@ from 景觀植物AI系統.查詢.filters import (
     merge_ai_and_manual_filters,
     merge_known_and_ai_filters,
     parse_question_to_filters,
+    suggest_plant_search_terms,
 )
 from 景觀植物AI系統.查詢.search import apply_filters, find_relaxed_candidates
 from 景觀植物AI系統.資料.matrix_loader import load_matrix as _load_matrix
@@ -41,7 +40,7 @@ from 景觀植物AI系統.設定.settings import (
 )
 
 
-QUERY_LOGIC_VERSION = "2026-08-13-unified-planting-advice-v1"
+QUERY_LOGIC_VERSION = "2026-08-14-theme-always-composes-v6"
 EXAMPLE_QUESTIONS = [
     "我想找春天開粉紅花的灌木。",
     "秋天有果實的樹有哪些？",
@@ -113,10 +112,16 @@ def build_proposal_overview(df, roles):
                 color_evidence.append(f"{label}：{value}")
         rows.append(
             {
-                "景觀角色": role.get("role") or "景觀搭配植物",
+                "固定層次": role.get("layer") or "依型態待確認",
+                "固定角色": role.get("role") or "景觀搭配候選",
+                "選入的資料依據": role.get("selection_evidence", "資料表僅可確認型態"),
                 "植物": row["chinese_name"],
                 "型態": row["plant_type"],
+                "實際命中月份與部位": role.get("seasonal_evidence", {}).get("text", "未指定季節條件"),
+                "季節覆蓋": role.get("seasonal_evidence", {}).get("coverage", "未指定季節條件"),
                 "資料可確認的色彩": "；".join(color_evidence) or "色彩資料未提供",
+                "資料狀態": f"{role.get('confidence') or '未標示'}／{'需要人工複查' if role.get('needs_review') else '未標示需複查'}",
+                "與其他植栽的協作": role.get("collaboration", "系統尚未建立協作說明"),
             }
         )
     return pd.DataFrame(rows)
@@ -128,7 +133,7 @@ def describe_applied_filters(filters):
         descriptions.append("月份：" + "、".join(f"{month}月" for month in filters["months"]))
     if filters.get("ornamental_parts"):
         descriptions.append("觀賞重點：" + "、".join(filters["ornamental_parts"]))
-    labels = {"plant_types": "植物型態", "growth_forms": "生長型態", "flower_colors": "花色", "fruit_colors": "果色", "leaf_colors": "葉色"}
+    labels = {"plant_name_terms": "指定植物名稱", "plant_types": "植物型態", "growth_forms": "生長型態", "flower_colors": "花色", "fruit_colors": "果色", "leaf_colors": "葉色"}
     for field, label in labels.items():
         if filters.get(field):
             descriptions.append(f"{label}：" + "、".join(filters[field]))
@@ -136,6 +141,8 @@ def describe_applied_filters(filters):
         descriptions.append("全年觀賞性")
     if filters.get("requires_seasonal_change"):
         descriptions.append("季節變化")
+    if filters.get("requires_full_month_coverage"):
+        descriptions.append("指定月份完整覆蓋")
     if filters.get("requires_composition"):
         descriptions.append("景觀組合模式")
     if filters.get("design_palette_name"):
@@ -151,6 +158,8 @@ def render_results(result):
     coverage = build_coverage_analysis(selected)
     st.subheader("植栽建議與景觀提案")
     if result.get("answer"):
+        if result.get("has_composition"):
+            st.caption("設計解讀（植物事實、分層與資料品質以下方系統表格為準）")
         st.markdown(result["answer"])
     else:
         st.info("AI 暫時無法使用，以下仍保留 Python 篩選與排序結果。")
@@ -164,14 +173,26 @@ def render_results(result):
                 hide_index=True,
                 use_container_width=True,
             )
+        quality = (result.get("composition") or {}).get("quality", {})
+        if quality.get("all_need_review"):
+            st.error("資料品質限制：本次配置的植物全數需要人工複查；本結果僅可用於設計初選，不可直接作為定案依據。")
+        elif quality.get("needs_review"):
+            st.warning(f"資料品質提醒：本次配置有 {quality['needs_review']} 筆需要人工複查；請先複核相關資料再定案。")
     st.subheader("本次查詢依據")
     st.write(describe_applied_filters(result["filters"]))
     if result["filters"].get("unverified_terms"):
         st.info("目前資料無法確認：" + "、".join(result["filters"]["unverified_terms"]) + "。以下結果仍依可驗證條件提供。")
     if result.get("approximation_note"):
         st.info(result["approximation_note"])
+    if result.get("hard_filter_no_match"):
+        st.error(
+            "找不到符合指定植物名稱的資料，因此沒有自動改用其他植物或建立替代配置。"
+            "若要看非指定植物的替代候選，請在問題中明確表示「可以看替代植物」。"
+        )
+    if result.get("ai_keyword_interpretation"):
+        st.info("AI 關鍵字辨識：" + result["ai_keyword_interpretation"] + "；系統僅採用資料表實際命中的植物。")
     if result["filters"].get("requires_composition"):
-        st.info("本案已依候選植物建立高、中、低層與季節角色；這是季節視覺搭配，不代表已驗證基地適應性。")
+        st.info("本案的高、中、低層與協作角色，是依植物型態建立的初步設計推定；實際株高、基地適應性與施工配置尚未驗證。")
     with st.expander("研究與資料細節", expanded=False):
         st.json(result["filters"], expanded=False)
     metrics = st.columns(5)
@@ -239,42 +260,75 @@ def render_app():
                 ai_filters = DEFAULT_FILTERS.copy()
                 st.info("AI 條件解析暫時不可用，已改以側欄條件進行查詢。")
             applied = merge_ai_and_manual_filters(merge_known_and_ai_filters(ai_filters, known_filters), manual_filters)
+            valid_options = {
+                "plant_types": options["plant_types"],
+                "growth_forms": options["growth_forms"],
+                "flower_colors": options["flower_colors"],
+                "fruit_colors": options["fruit_colors"],
+                "leaf_colors": options["leaf_colors"],
+            }
+            for field, allowed in valid_options.items():
+                applied[field] = [value for value in applied.get(field, []) if value in allowed]
             has_composition = bool(
                 applied.get("design_palette_name")
                 or applied.get("requires_composition")
             )
             if has_composition:
                 applied["requires_composition"] = True
-            candidates = score_candidates(apply_filters(matrix_df, applied), applied)
+            named_candidate_df = apply_filters(matrix_df, applied)
+            named_theme_lookup = "主題" in question and not applied.get("plant_name_terms")
+            hard_filter_no_match = bool(applied.get("plant_name_terms")) and named_candidate_df.empty
+            ai_keyword_interpretation = ""
+            if (hard_filter_no_match or named_theme_lookup) and settings.get("OPENAI_API_KEY"):
+                try:
+                    keyword_result = suggest_plant_search_terms(question, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
+                    suggested_terms = keyword_result["terms"]
+                    if suggested_terms:
+                        suggested_filters = {**applied, "plant_name_terms": suggested_terms}
+                        suggested_matches = apply_filters(matrix_df, suggested_filters)
+                        if not suggested_matches.empty:
+                            applied["plant_name_terms"] = suggested_terms
+                            named_candidate_df = suggested_matches
+                            hard_filter_no_match = False
+                            ai_keyword_interpretation = keyword_result["interpretation"] or ("將需求理解為：" + "、".join(suggested_terms))
+                        elif named_theme_lookup:
+                            hard_filter_no_match = True
+                    elif named_theme_lookup:
+                        hard_filter_no_match = True
+                except Exception:
+                    if named_theme_lookup:
+                        hard_filter_no_match = True
+            support_filters = {**applied, "plant_name_terms": []}
+            candidates = score_candidates(
+                apply_filters(matrix_df, support_filters) if applied.get("plant_name_terms") else named_candidate_df,
+                support_filters,
+            )
             approximation_note = ""
-            if candidates.empty:
+            if candidates.empty and not hard_filter_no_match:
                 relaxed_candidates, relaxed_field = find_relaxed_candidates(matrix_df, applied)
                 if not relaxed_candidates.empty:
                     candidates = score_candidates(relaxed_candidates, applied)
                     approximation_note = f"找不到完全符合條件的資料，以下先放寬「{relaxed_field}」提供近似結果。"
-            composition = build_composition(candidates, applied) if has_composition else None
+            required_plant_ids = named_candidate_df["plant_id"].map(str).tolist() if applied.get("plant_name_terms") else []
+            composition = (
+                build_composition(candidates, applied, required_plant_ids=required_plant_ids)
+                if has_composition and not hard_filter_no_match else None
+            )
             selected = composition["selected"] if composition else select_recommendations(candidates, applied)
-            answer = ""
+            answer = (
+                "目前資料表找不到同時符合指定植物名稱與其他條件的植物，因此不以其他植物替代。"
+                if hard_filter_no_match else ""
+            )
             roles = composition["roles"] if composition else {}
             data_limit = composition["data_limit"] if composition else ""
-            if settings.get("OPENAI_API_KEY"):
+            if settings.get("OPENAI_API_KEY") and not hard_filter_no_match:
                 try:
                     with st.spinner("AI 正在根據候選資料整理回答..."):
                         context_rows = 55 if has_composition else 20
                         context_source = selected if has_composition else candidates
                         candidate_context = build_ai_context(context_source, applied, max_rows=context_rows)
                         if has_composition:
-                            proposal = generate_design_proposal(question, applied, candidate_context, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"], composition=composition)
-                            proposal_result = validate_design_proposal(proposal, selected, selected, applied["requested_count"])
-                            answer = proposal_result["answer"]
-                            invalid_ids = invalid_answer_plant_ids(answer, candidates)
-                            if invalid_ids or not answer_uses_exact_composition(answer, selected, candidates):
-                                answer = (
-                                    "AI 回答沒有完整依照系統配置清單列出植物，因此未採用文字回答；"
-                                    "以下保留系統依候選植物清單建立的配置結果。"
-                                )
-                            if proposal_result["data_limit"]:
-                                data_limit += " " + proposal_result["data_limit"]
+                            answer = generate_design_interpretation(question, composition, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
                         else:
                             answer = generate_grounded_answer(question, applied, candidate_context, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
                             invalid_ids = invalid_answer_plant_ids(answer, candidates)
@@ -282,7 +336,7 @@ def render_app():
                                 answer = "AI 回答出現無法回溯至候選資料的 plant_id，因此未採用文字回答；以下顯示 Python 篩選與排序結果。"
                 except Exception:
                     st.info("AI 回答暫時不可用，已顯示可追溯的篩選結果。")
-            st.session_state["matrix_result"] = {"cache_key": cache_key, "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition, "composition": composition, "approximation_note": approximation_note}
+            st.session_state["matrix_result"] = {"cache_key": cache_key, "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition and not hard_filter_no_match, "composition": composition, "approximation_note": approximation_note, "hard_filter_no_match": hard_filter_no_match, "ai_keyword_interpretation": ai_keyword_interpretation}
     if "matrix_result" in st.session_state:
         render_results(st.session_state["matrix_result"])
 

@@ -1,5 +1,7 @@
 """DataFrame search helpers."""
 
+import re
+
 import pandas as pd
 
 from ..資料.normalizer import normalize_boolean, normalize_multivalue_text
@@ -14,6 +16,22 @@ def _row_matches_values(value, choices):
         for item in normalize_multivalue_text(choice)
     }
     return bool(normalized.intersection(requested))
+
+
+def _row_matches_plant_name(row, terms):
+    """Match explicit names without allowing Latin substring false positives."""
+    chinese_name = str(row.get("chinese_name", "") or "")
+    scientific_name = str(row.get("scientific_name", "") or "").casefold()
+    for term in terms:
+        term = str(term or "").strip()
+        if not term:
+            continue
+        if any("\u4e00" <= character <= "\u9fff" for character in term):
+            if term in chinese_name:
+                return True
+        elif re.search(rf"(?<![a-z]){re.escape(term.casefold())}(?![a-z])", scientific_name):
+            return True
+    return False
 
 
 def _month_match(row, months, parts):
@@ -39,6 +57,8 @@ def apply_filters(df, filters):
         choices = filters.get(filter_name, [])
         if choices:
             matches &= df[column].map(lambda value: _row_matches_values(value, choices))
+    if filters.get("plant_name_terms"):
+        matches &= df.apply(lambda row: _row_matches_plant_name(row, filters["plant_name_terms"]), axis=1)
     if filters.get("design_palette_colors"):
         palette = filters["design_palette_colors"]
         matches &= df.apply(
@@ -63,7 +83,20 @@ def apply_filters(df, filters):
                 lambda value: bool(set(normalize_multivalue_text(value)).intersection(parts_needing_ornamental_label))
             )
     if filters.get("months"):
-        matches &= df.apply(lambda row: _month_match(row, filters["months"], filters.get("ornamental_parts", [])), axis=1)
+        if filters.get("requires_full_month_coverage"):
+            requested_parts = filters.get("ornamental_parts") or list(MONTH_FIELD_PREFIXES)
+            matches &= df.apply(
+                lambda row: all(
+                    any(
+                        normalize_boolean(row.get(f"{MONTH_FIELD_PREFIXES[part]}_{MONTH_KEYS[month - 1]}"))
+                        for part in requested_parts
+                    )
+                    for month in filters["months"]
+                ),
+                axis=1,
+            )
+        else:
+            matches &= df.apply(lambda row: _month_match(row, filters["months"], filters.get("ornamental_parts", [])), axis=1)
     if filters.get("exclude_needs_review"):
         matches &= ~df["needs_review"]
     return df.loc[matches].copy()

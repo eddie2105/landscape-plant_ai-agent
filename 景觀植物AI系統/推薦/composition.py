@@ -13,12 +13,12 @@ from ..查詢.schema import MONTH_FIELD_PREFIXES, MONTH_KEYS
 
 
 ROLE_SPECS = (
-    ("骨架／背景", "高層", "作為背景或重複配置", "建立空間骨架與視覺背景"),
-    ("中層量體", "中層", "以塊狀或群植方式配置", "形成中段量體，銜接背景與前景"),
-    ("前景／收邊", "低層", "以前景帶狀或成片方式配置", "收邊、地表覆蓋或提供近距離觀賞"),
+    ("骨架／背景候選", "高層", "作為背景或重複配置", "建立初步空間骨架與視覺背景"),
+    ("中層量體候選", "中層", "以塊狀或群植方式配置", "形成初步中段量體，銜接背景與前景"),
+    ("前景／收邊候選", "低層", "以前景帶狀或成片方式配置", "形成初步前景、收邊或地表覆蓋"),
 )
-SUPPORTING_ROLE = "補充搭配"
-SEASONAL_ROLE = "季節焦點"
+SUPPORTING_ROLE = "季節銜接候選"
+SEASONAL_ROLE = "季節花果葉焦點候選"
 
 
 def landscape_layer(row):
@@ -45,15 +45,73 @@ def _matches_requested_season(row, filters):
     return False
 
 
-def _role_data(row, role, pattern, purpose):
+def _seasonal_evidence(row, filters):
+    """Return exact, recorded month evidence for this row and request."""
+    requested_months = filters.get("months", [])
+    requested_parts = filters.get("ornamental_parts") or list(MONTH_FIELD_PREFIXES)
+    by_part = {}
+    for part in requested_parts:
+        prefix = MONTH_FIELD_PREFIXES[part]
+        active = [month for month, key in enumerate(MONTH_KEYS, start=1) if normalize_boolean(row.get(f"{prefix}_{key}"))]
+        matched = [month for month in active if not requested_months or month in requested_months]
+        if matched:
+            by_part[part] = matched
+    matched_months = sorted({month for months in by_part.values() for month in months})
+    if not requested_months:
+        coverage = "未指定季節條件"
+    elif set(requested_months).issubset(matched_months):
+        coverage = "指定月份完整覆蓋"
+    elif matched_months:
+        coverage = "指定月份部分覆蓋"
+    else:
+        coverage = "指定月份無可確認紀錄"
+    evidence_text = "；".join(f"{part}：{'、'.join(f'{month}月' for month in months)}" for part, months in by_part.items()) or "無可確認的指定季節紀錄"
+    return {"by_part": by_part, "matched_months": matched_months, "coverage": coverage, "text": evidence_text}
+
+
+def _role_for_remaining(row, filters):
+    layer = landscape_layer(row)
+    evidence = _seasonal_evidence(row, filters)
+    if layer == "其他型態":
+        text = f"{as_text(row.get('plant_type'))} {as_text(row.get('growth_form'))}"
+        return ("藤本垂直綠化候選" if "藤本" in text else "其他型態候選", "依基地條件作垂直或特殊型態配置", "作為非高、中、低層的條件式搭配")
+    if layer == "高層":
+        return ("高層季節表現候選", "在背景中重複或局部點置", "延續高層季節節奏")
+    if layer == "中層":
+        return ("中層花果過渡候選", "以塊狀或群植方式配置", "銜接中層量體與季節表現")
+    if evidence["by_part"]:
+        return ("前景季節草本候選", "以前景帶狀或成片方式配置", "提供近距離的季節觀賞")
+    return ("前景地表覆蓋候選", "以前景帶狀或成片方式配置", "補足地表與前景層次")
+
+
+def _role_data(row, role, pattern, purpose, filters):
     plant_id = as_text(row.get("plant_id"))
     evidence = as_text(row.get("match_reasons")) or "依候選資料的植物型態與季節資訊選入"
+    seasonal_evidence = _seasonal_evidence(row, filters)
+    selection_evidence = []
+    if filters.get("months") and seasonal_evidence["by_part"]:
+        selection_evidence.append(seasonal_evidence["text"])
+    else:
+        for label, column in (("花色", "flower_color"), ("果色", "fruit_color"), ("葉色", "leaf_color")):
+            value = as_text(row.get(column))
+            if value:
+                selection_evidence.append(f"{label}：{value}")
+        ornamental = as_text(row.get("ornamental_part"))
+        if ornamental:
+            selection_evidence.append(f"觀賞部位：{ornamental}")
+    if not selection_evidence:
+        selection_evidence.append("資料表僅可確認植物型態／生長型態")
     return {
         "plant_id": plant_id,
         "role": role,
         "rationale": f"{purpose}；{evidence}。",
         "planting_pattern": pattern,
         "purpose": purpose,
+        "layer": landscape_layer(row),
+        "seasonal_evidence": seasonal_evidence,
+        "selection_evidence": "；".join(selection_evidence),
+        "confidence": as_text(row.get("confidence")),
+        "needs_review": normalize_boolean(row.get("needs_review")),
     }
 
 
@@ -70,7 +128,35 @@ def _is_water_feature(row):
     return "水生" in text or "濕生" in text
 
 
-def build_composition(candidate_df, filters):
+def _join_names(rows, layer):
+    names = [as_text(row.get("chinese_name")) for row in rows if landscape_layer(row) == layer]
+    return "、".join(filter(None, names)) or "目前未選入此層植物"
+
+
+def _add_collaboration_guidance(selected_rows, roles):
+    """Add traceable design relationships after the final plant list is fixed."""
+    high_names = _join_names(selected_rows, "高層")
+    middle_names = _join_names(selected_rows, "中層")
+    low_names = _join_names(selected_rows, "低層")
+    other_names = _join_names(selected_rows, "其他型態")
+    for row in selected_rows:
+        plant_id = as_text(row.get("plant_id"))
+        item = roles[plant_id]
+        layer = item["layer"]
+        if item["role"].startswith("主題植物"):
+            text = f"作為主題焦點，與中層的「{middle_names}」形成前後景銜接，並由低層的「{low_names}」延伸至觀賞前景。"
+        elif layer == "高層":
+            text = f"與主題高層共同形成背景節奏；前方以「{middle_names}」銜接量體，底部由「{low_names}」完成前景過渡。"
+        elif layer == "中層":
+            text = f"配置在高層「{high_names}」之前形成量體，並與低層「{low_names}」以塊狀或群植方式銜接。"
+        elif layer == "低層":
+            text = f"配置於觀賞前景，以帶狀或成片方式承接中層「{middle_names}」，讓視線由地表過渡至高層「{high_names}」。"
+        else:
+            text = f"作為其他型態候選，需依基地條件安排；可與「{high_names}」、「{middle_names}」及「{low_names}」形成垂直或特殊位置的補充關係。"
+        item["collaboration"] = text
+
+
+def build_composition(candidate_df, filters, required_plant_ids=None):
     """Build a traceable planting composition from already ranked candidates.
 
     The first available high, middle, and low layer plants receive structural
@@ -94,14 +180,35 @@ def build_composition(candidate_df, filters):
         remaining = remaining.loc[~remaining.apply(_is_water_feature, axis=1)].copy()
     selected_rows, roles, unfilled_roles = [], {}, []
 
+    # A named plant is the non-negotiable theme plant.  It must appear in the
+    # proposal, while other candidates can still complete the planting layers.
+    for plant_id in required_plant_ids or []:
+        named_rows = remaining[remaining["plant_id"].map(as_text) == as_text(plant_id)]
+        if named_rows.empty or len(selected_rows) >= requested_count:
+            continue
+        row = named_rows.iloc[0]
+        layer = landscape_layer(row)
+        purpose = "保留使用者明確指定的植物作為方案主題"
+        roles[as_text(row.get("plant_id"))] = _role_data(
+            row,
+            f"主題植物／{layer}季節焦點候選",
+            "作為視覺焦點並與其他層次重複或群植配置",
+            purpose,
+            filters,
+        )
+        selected_rows.append(row)
+        remaining = remaining.drop(index=row.name)
+
     for role, target_layer, pattern, purpose in ROLE_SPECS:
+        if any(landscape_layer(row) == target_layer for row in selected_rows):
+            continue
         matches = remaining[remaining.apply(landscape_layer, axis=1) == target_layer]
         if matches.empty:
             unfilled_roles.append(role)
             continue
         row = matches.iloc[0]
         selected_rows.append(row)
-        roles[as_text(row.get("plant_id"))] = _role_data(row, role, pattern, purpose)
+        roles[as_text(row.get("plant_id"))] = _role_data(row, role, pattern, purpose, filters)
         remaining = remaining.drop(index=row.name)
 
     seasonal_matches = remaining[remaining.apply(lambda row: _matches_requested_season(row, filters), axis=1)]
@@ -109,7 +216,7 @@ def build_composition(candidate_df, filters):
         row = seasonal_matches.iloc[0]
         selected_rows.append(row)
         roles[as_text(row.get("plant_id"))] = _role_data(
-            row, SEASONAL_ROLE, "作為視線可及處的點狀或小群植", "提供指定季節的可確認觀賞焦點"
+            row, SEASONAL_ROLE, "作為視線可及處的點狀或小群植", "提供指定季節的可確認觀賞焦點", filters
         )
         remaining = remaining.drop(index=row.name)
 
@@ -117,9 +224,8 @@ def build_composition(candidate_df, filters):
         if len(selected_rows) >= requested_count:
             break
         selected_rows.append(row)
-        roles[as_text(row.get("plant_id"))] = _role_data(
-            row, SUPPORTING_ROLE, "依相鄰植栽以群植、帶狀或重複方式配置", "補足層次、色彩或季節銜接"
-        )
+        role, pattern, purpose = _role_for_remaining(row, filters)
+        roles[as_text(row.get("plant_id"))] = _role_data(row, role, pattern, purpose, filters)
 
     selected_ids = [as_text(row.get("plant_id")) for row in selected_rows]
     if not selected_ids:
@@ -133,23 +239,44 @@ def build_composition(candidate_df, filters):
     selected = candidate_df[candidate_df["plant_id"].map(as_text).isin(selected_ids)].copy()
     selected["_composition_order"] = selected["plant_id"].map({plant_id: index for index, plant_id in enumerate(selected_ids)})
     selected = selected.sort_values("_composition_order").drop(columns="_composition_order")
+    ordered_rows = [selected.loc[selected["plant_id"].map(as_text) == plant_id].iloc[0] for plant_id in selected_ids]
+    _add_collaboration_guidance(ordered_rows, roles)
 
     missing_text = "、".join(unfilled_roles)
     review_names = selected.loc[selected["needs_review"].map(normalize_boolean), "chinese_name"].map(as_text).tolist()
     data_limit = (
-        "本配置僅依資料表可確認的型態、生長型態、花果葉色、月份與資料信心建立；"
+        "本配置的層次、角色與協作關係是依植物型態建立的初步設計推定；"
+        "資料表僅可確認型態、生長型態、花果葉色、月份與資料信心；"
         "日照、土壤、排水、成株尺度、株距、數量與維護需求仍須現地確認。"
     )
     if review_names:
         data_limit += "需要人工複查的植物：" + "、".join(review_names) + "。"
     if missing_text:
         data_limit += f"候選資料未找到可擔任{missing_text}的植物，因此未強行補足。"
+    quality = {
+        "total": len(selected),
+        "high_confidence": int((selected["confidence"].map(as_text).str.casefold() == "high").sum()),
+        "needs_review": len(review_names),
+        "all_need_review": bool(len(selected) and len(review_names) == len(selected)),
+    }
     return {
         "design_concept": _design_concept(filters),
         "selected": selected,
         "roles": roles,
         "unfilled_roles": unfilled_roles,
         "data_limit": data_limit,
+        "quality": quality,
+        "items": [
+            {
+                "chinese_name": as_text(row.get("chinese_name")),
+                "plant_id": as_text(row.get("plant_id")),
+                "layer": roles[as_text(row.get("plant_id"))]["layer"],
+                "role": roles[as_text(row.get("plant_id"))]["role"],
+                "collaboration": roles[as_text(row.get("plant_id"))]["collaboration"],
+                "selection_evidence": roles[as_text(row.get("plant_id"))]["selection_evidence"],
+            }
+            for row in ordered_rows
+        ],
     }
 
 

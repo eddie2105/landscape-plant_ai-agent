@@ -6,15 +6,16 @@ MONTH_LABELS = {index: f"{index}月" for index in range(1, 13)}
 MONTH_FIELD_PREFIXES = {"花": "flower", "果": "fruit", "葉": "leaf"}
 FILTER_LIST_FIELDS = (
     "months", "ornamental_parts", "plant_types", "growth_forms", "flower_colors",
-    "fruit_colors", "leaf_colors", "confidence",
+    "fruit_colors", "leaf_colors", "confidence", "plant_name_terms",
 )
 DEFAULT_FILTERS = {
     "months": [], "ornamental_parts": [], "plant_types": [], "growth_forms": [],
-    "flower_colors": [], "fruit_colors": [], "leaf_colors": [], "confidence": [],
+    "flower_colors": [], "fruit_colors": [], "leaf_colors": [], "confidence": [], "plant_name_terms": [],
     "requires_year_round_interest": False, "requires_seasonal_change": False,
     "exclude_needs_review": False, "requested_count": 8, "user_intent_summary": "",
     "requires_composition": False,
     "requires_water_feature": False,
+    "requires_full_month_coverage": False,
     "design_palette_name": "", "design_palette_colors": [],
 }
 SCORE_WEIGHTS = {
@@ -65,6 +66,15 @@ UNSUPPORTED_TERM_LABELS = {
 DESIGN_PALETTES = {
     "香檳色": ["乳白", "白", "黃", "金黃"],
 }
+PLANT_NAME_ALIASES = {
+    # A user asking for cherry blossom normally means the genus/name concept,
+    # not a value in the plant_type column.
+    "櫻花": ["櫻花", "Prunus"],
+    # A category request should remain a name-based hard condition, but it
+    # needs the recorded Chinese and scientific-name variants to be useful.
+    "松樹": ["松", "Pinus", "Podocarpus"],
+    "梅樹": ["梅花", "Armeniaca mume"],
+}
 DESIGN_STYLE_PROFILES = {
     "香檳色": {
         "keywords": ("香檳",),
@@ -97,5 +107,6 @@ __all__ = [
     "PLAIN_LANGUAGE_TYPE_ALIASES",
     "UNSUPPORTED_TERM_LABELS",
     "DESIGN_PALETTES",
+    "PLANT_NAME_ALIASES",
     "DESIGN_STYLE_PROFILES",
 ]
