@@ -16,6 +16,7 @@ if not sys.path or sys.path[0] != str(PROJECT_ROOT):
 
 from 景觀植物AI系統.AI回答.context import build_ai_context
 from 景觀植物AI系統.AI回答.generator import (
+    answer_uses_exact_composition,
     generate_design_proposal,
     generate_grounded_answer,
     invalid_answer_plant_ids,
@@ -23,6 +24,7 @@ from 景觀植物AI系統.AI回答.generator import (
 )
 from 景觀植物AI系統.介面.charts import build_coverage_analysis, build_seasonal_matrix
 from 景觀植物AI系統.推薦.scoring import score_candidates, select_recommendations
+from 景觀植物AI系統.推薦.composition import build_composition
 from 景觀植物AI系統.查詢.filters import (
     DEFAULT_FILTERS,
     extract_known_filters,
@@ -39,7 +41,7 @@ from 景觀植物AI系統.設定.settings import (
 )
 
 
-QUERY_LOGIC_VERSION = "2026-07-17-unified-answer-v8"
+QUERY_LOGIC_VERSION = "2026-08-13-unified-planting-advice-v1"
 EXAMPLE_QUESTIONS = [
     "我想找春天開粉紅花的灌木。",
     "秋天有果實的樹有哪些？",
@@ -74,13 +76,12 @@ def render_filters(options):
         confidence = st.multiselect("資料信心", ["high", "medium", "low"], key="filter_confidence")
         exclude_review = st.checkbox("排除需要人工複查的資料", key="filter_exclude_review")
         requested_count = st.slider("推薦數量", 5, 20, 8, key="filter_requested_count")
-        response_mode = st.radio("回答方式", ["查資料", "景觀提案"], key="filter_response_mode")
     return {
         "months": months, "ornamental_parts": parts, "plant_types": plant_types,
         "growth_forms": growth_forms, "flower_colors": flower_colors,
         "fruit_colors": fruit_colors, "leaf_colors": leaf_colors,
         "confidence": confidence, "exclude_needs_review": exclude_review,
-        "requested_count": requested_count, "response_mode": response_mode,
+        "requested_count": requested_count,
     }
 
 
@@ -148,12 +149,12 @@ def render_results(result):
     candidates = result["candidates"]
     selected = result["selected"]
     coverage = build_coverage_analysis(selected)
-    st.subheader("景觀提案" if result.get("design_proposal") else "AI 查詢結論")
+    st.subheader("植栽建議與景觀提案")
     if result.get("answer"):
         st.markdown(result["answer"])
     else:
         st.info("AI 暫時無法使用，以下仍保留 Python 篩選與排序結果。")
-    if result.get("design_proposal"):
+    if result.get("has_composition"):
         st.subheader("本次搭配植栽")
         if selected.empty:
             st.warning("目前沒有可用於搭配的候選植物。")
@@ -170,7 +171,7 @@ def render_results(result):
     if result.get("approximation_note"):
         st.info(result["approximation_note"])
     if result["filters"].get("requires_composition"):
-        st.info("景觀組合模式會優先讓高、中、低層與不同花果葉角色共同出現；這是季節視覺搭配，不代表已驗證基地適應性。")
+        st.info("本案已依候選植物建立高、中、低層與季節角色；這是季節視覺搭配，不代表已驗證基地適應性。")
     with st.expander("研究與資料細節", expanded=False):
         st.json(result["filters"], expanded=False)
     metrics = st.columns(5)
@@ -203,7 +204,7 @@ def render_app():
     disable_dead_local_proxy()
     st.set_page_config(page_title="景觀植栽 AI 查詢", page_icon="🌿", layout="wide")
     st.title("景觀植栽 AI 查詢")
-    st.caption("用自然語言描述植栽需求，系統依季節矩陣與輔助篩選條件查詢適合植物。")
+    st.caption("用自然語言描述植栽需求；系統會先查詢可追溯植物資料，再在需要時建立景觀配置。")
     try:
         matrix_df, source = load_matrix()
     except Exception as exc:
@@ -214,7 +215,7 @@ def render_app():
         if st.button(example, key=f"example_{index}"):
             st.session_state["question"] = example
     question = st.text_area("請描述你的植栽需求", placeholder="例如：想找 3 到 5 月有紫花的灌木。", height=130, key="question")
-    if st.button("詢問 AI", type="primary"):
+    if st.button("生成植栽建議", type="primary"):
         if not question.strip():
             st.warning("請先輸入問題。")
         else:
@@ -238,11 +239,11 @@ def render_app():
                 ai_filters = DEFAULT_FILTERS.copy()
                 st.info("AI 條件解析暫時不可用，已改以側欄條件進行查詢。")
             applied = merge_ai_and_manual_filters(merge_known_and_ai_filters(ai_filters, known_filters), manual_filters)
-            applied["design_proposal_mode"] = (
-                manual_filters["response_mode"] == "景觀提案"
-                or bool(applied.get("design_palette_name"))
+            has_composition = bool(
+                applied.get("design_palette_name")
+                or applied.get("requires_composition")
             )
-            if applied["design_proposal_mode"]:
+            if has_composition:
                 applied["requires_composition"] = True
             candidates = score_candidates(apply_filters(matrix_df, applied), applied)
             approximation_note = ""
@@ -251,22 +252,29 @@ def render_app():
                 if not relaxed_candidates.empty:
                     candidates = score_candidates(relaxed_candidates, applied)
                     approximation_note = f"找不到完全符合條件的資料，以下先放寬「{relaxed_field}」提供近似結果。"
-            selected = select_recommendations(candidates, applied)
+            composition = build_composition(candidates, applied) if has_composition else None
+            selected = composition["selected"] if composition else select_recommendations(candidates, applied)
             answer = ""
-            roles = {}
-            data_limit = ""
+            roles = composition["roles"] if composition else {}
+            data_limit = composition["data_limit"] if composition else ""
             if settings.get("OPENAI_API_KEY"):
                 try:
                     with st.spinner("AI 正在根據候選資料整理回答..."):
-                        context_rows = 55 if applied["design_proposal_mode"] else 20
-                        candidate_context = build_ai_context(candidates, applied, max_rows=context_rows)
-                        if applied["design_proposal_mode"]:
-                            proposal = generate_design_proposal(question, applied, candidate_context, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
-                            proposal_result = validate_design_proposal(proposal, candidates.head(context_rows), selected, applied["requested_count"])
-                            selected = proposal_result["selected"]
+                        context_rows = 55 if has_composition else 20
+                        context_source = selected if has_composition else candidates
+                        candidate_context = build_ai_context(context_source, applied, max_rows=context_rows)
+                        if has_composition:
+                            proposal = generate_design_proposal(question, applied, candidate_context, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"], composition=composition)
+                            proposal_result = validate_design_proposal(proposal, selected, selected, applied["requested_count"])
                             answer = proposal_result["answer"]
-                            roles = proposal_result["roles"]
-                            data_limit = proposal_result["data_limit"]
+                            invalid_ids = invalid_answer_plant_ids(answer, candidates)
+                            if invalid_ids or not answer_uses_exact_composition(answer, selected, candidates):
+                                answer = (
+                                    "AI 回答沒有完整依照系統配置清單列出植物，因此未採用文字回答；"
+                                    "以下保留系統依候選植物清單建立的配置結果。"
+                                )
+                            if proposal_result["data_limit"]:
+                                data_limit += " " + proposal_result["data_limit"]
                         else:
                             answer = generate_grounded_answer(question, applied, candidate_context, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
                             invalid_ids = invalid_answer_plant_ids(answer, candidates)
@@ -274,7 +282,7 @@ def render_app():
                                 answer = "AI 回答出現無法回溯至候選資料的 plant_id，因此未採用文字回答；以下顯示 Python 篩選與排序結果。"
                 except Exception:
                     st.info("AI 回答暫時不可用，已顯示可追溯的篩選結果。")
-            st.session_state["matrix_result"] = {"cache_key": cache_key, "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "design_proposal": applied["design_proposal_mode"], "approximation_note": approximation_note}
+            st.session_state["matrix_result"] = {"cache_key": cache_key, "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition, "composition": composition, "approximation_note": approximation_note}
     if "matrix_result" in st.session_state:
         render_results(st.session_state["matrix_result"])
 

@@ -64,15 +64,24 @@ def generate_grounded_answer(question, applied_filters, candidate_context, api_k
     return as_text(response.output_text)
 
 
-def generate_design_proposal(question, applied_filters, candidate_context, api_key, model, client=None):
+def generate_design_proposal(question, applied_filters, candidate_context, api_key, model, composition=None, client=None):
+    # ``selected`` is a DataFrame used by the UI and cannot be JSON-encoded for
+    # the Responses API.  The model only needs the locked design metadata; its
+    # candidate facts are already supplied separately in ``candidate_context``.
+    composition_prompt_data = {
+        key: value
+        for key, value in (composition or {}).items()
+        if key != "selected"
+    }
     prompt = f"""你是景觀植栽設計提案助理。你可以對候選植物的搭配方式提出創意建議，
 但不得捏造植物的耐性、高度、基地適應性、生態功能或未提供的顏色與季節資料。
 你只能從候選資料中的 plant_id 選植物。花、果、葉、月份、信心程度與複查狀態的事實必須來自候選資料。
 
 {PLANTING_DESIGN_FRAMEWORK}
 
-景觀提案不得只有氣氛描述。你必須選出 6-8 株植物；候選不足時列出全部候選。
-每一株必須有中文名、學名、plant_id、景觀角色，以及候選資料中的花／果／葉色或季節依據。
+景觀提案不得只有氣氛描述。系統已先依園林規則建立「最終配置方案」；其中的 plant_id 就是本次提案唯一可用的植物清單。你必須逐一保留全部 plant_id 及其既定角色與順序，不得新增、刪除、替換或自行改選任何植物。
+每一株必須有中文名、學名、plant_id、系統既定的景觀角色，以及候選資料中的花／果／葉色或季節依據。
+不得宣稱香氣、生態功能、庭院適應性、成株高度、株距、日照、耐旱或資料表未列的植物特性。不得自行總結「全部無 needs_review」；資料品質由系統顯示。
 若 design_palette_name 有值，這是系統的設計色調翻譯；不得說資料原本標示該色調名稱。
 若 unverified_terms 有值，這些需求沒有可驗證欄位；不得因此說沒有候選植物，需在資料提醒中說明。
 
@@ -95,7 +104,7 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
 只能輸出下列 JSON，不要加任何說明：
 {{
   "answer": "完整的固定三段式 Markdown 回答，必須直接列出每株植物名稱與 plant_id",
-  "plant_ids": ["只能是候選資料內的 plant_id，6-8 筆；候選不足時可少於 6 筆"],
+  "plant_ids": ["必須與系統建立的配置方案 plant_id 完全相同，且順序相同"],
   "roles": [
     {{"plant_id": "候選 plant_id", "role": "主景/中層量體/前景/色彩焦點/背景等", "rationale": "只描述設計上的搭配角色，不宣稱未提供的植物事實"}}
   ],
@@ -106,7 +115,7 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
         model=model,
         input=[
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"使用者需求：{question}\n設計與篩選條件：{json.dumps(applied_filters, ensure_ascii=False)}\n最多可用的候選植物：{candidate_context}"},
+            {"role": "user", "content": f"使用者需求：{question}\n設計與篩選條件：{json.dumps(applied_filters, ensure_ascii=False)}\n系統建立的配置方案：{json.dumps(composition_prompt_data, ensure_ascii=False)}\n可用候選植物：{candidate_context}"},
         ],
         timeout=45,
     )
@@ -152,11 +161,21 @@ def invalid_answer_plant_ids(answer, candidate_df):
     return sorted({plant_id for plant_id in mentioned if plant_id not in known_ids})
 
 
+def answer_uses_exact_composition(answer, selected_df, all_candidate_df):
+    """Ensure an AI proposal lists all and only the program-selected plants."""
+    expected_ids = {as_text(value) for value in selected_df.get("plant_id", [])}
+    all_ids = {as_text(value) for value in all_candidate_df.get("plant_id", [])}
+    text = as_text(answer)
+    mentioned_ids = {plant_id for plant_id in all_ids if plant_id and plant_id in text}
+    return bool(expected_ids) and mentioned_ids == expected_ids
+
+
 __all__ = [
     "FINAL_REMINDER",
     "PLANTING_DESIGN_FRAMEWORK",
     "generate_design_proposal",
     "generate_grounded_answer",
+    "answer_uses_exact_composition",
     "invalid_answer_plant_ids",
     "validate_design_proposal",
 ]

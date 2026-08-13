@@ -66,6 +66,7 @@ def extract_known_filters(question, options):
     filters["requires_year_round_interest"] = any(word in normalized_text for word in ("四季", "全年", "整年"))
     filters["requires_seasonal_change"] = any(word in normalized_text for word in ("季節變化", "四季變化"))
     filters["requires_composition"] = any(word in normalized_text for word in ("庭院", "花園", "景觀", "搭配", "一組"))
+    filters["requires_water_feature"] = any(word in normalized_text for word in ("水景", "水池", "池塘", "生態池", "濕地", "水生"))
     for style_name, profile in DESIGN_STYLE_PROFILES.items():
         if any(keyword in normalized_text for keyword in profile["keywords"]):
             filters["design_palette_name"] = style_name
@@ -83,7 +84,7 @@ def merge_known_and_ai_filters(ai_filters, known_filters):
     for field in FILTER_LIST_FIELDS:
         if known_filters.get(field):
             merged[field] = known_filters[field]
-    for field in ("requires_year_round_interest", "requires_seasonal_change", "requires_composition"):
+    for field in ("requires_year_round_interest", "requires_seasonal_change", "requires_composition", "requires_water_feature"):
         if known_filters.get(field):
             merged[field] = True
     merged["unverified_terms"] = known_filters.get("unverified_terms", [])
@@ -129,7 +130,7 @@ requires_seasonal_change, requires_composition, exclude_needs_review, requested_
         filters[field] = value if isinstance(value, list) else []
     filters["months"] = sorted({int(month) for month in filters["months"] if str(month).isdigit() and 1 <= int(month) <= 12})
     filters["ornamental_parts"] = [part for part in filters["ornamental_parts"] if part in MONTH_FIELD_PREFIXES]
-    for field in ("requires_year_round_interest", "requires_seasonal_change", "requires_composition", "exclude_needs_review"):
+    for field in ("requires_year_round_interest", "requires_seasonal_change", "requires_composition", "requires_water_feature", "exclude_needs_review"):
         filters[field] = normalize_boolean(parsed.get(field))
     try:
         filters["requested_count"] = min(20, max(5, int(parsed.get("requested_count", 8))))
