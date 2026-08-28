@@ -83,20 +83,12 @@ def apply_filters(df, filters):
                 lambda value: bool(set(normalize_multivalue_text(value)).intersection(parts_needing_ornamental_label))
             )
     if filters.get("months"):
-        if filters.get("requires_full_month_coverage"):
-            requested_parts = filters.get("ornamental_parts") or list(MONTH_FIELD_PREFIXES)
-            matches &= df.apply(
-                lambda row: all(
-                    any(
-                        normalize_boolean(row.get(f"{MONTH_FIELD_PREFIXES[part]}_{MONTH_KEYS[month - 1]}"))
-                        for part in requested_parts
-                    )
-                    for month in filters["months"]
-                ),
-                axis=1,
-            )
-        else:
-            matches &= df.apply(lambda row: _month_match(row, filters["months"], filters.get("ornamental_parts", [])), axis=1)
+        # A request such as "the whole summer" describes the intended
+        # *composition*, not a requirement that every individual plant flower
+        # in every requested month.  Keep plants that match at least one month;
+        # ``build_composition`` later verifies whether the selected group
+        # jointly covers the full period.
+        matches &= df.apply(lambda row: _month_match(row, filters["months"], filters.get("ornamental_parts", [])), axis=1)
     if filters.get("exclude_needs_review"):
         matches &= ~df["needs_review"]
     return df.loc[matches].copy()

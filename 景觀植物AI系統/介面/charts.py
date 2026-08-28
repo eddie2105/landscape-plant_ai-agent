@@ -17,14 +17,26 @@ def build_seasonal_matrix(candidate_df):
     return pd.DataFrame(rows, columns=["植物", *MONTH_LABELS.values()])
 
 
-def build_coverage_analysis(candidate_df):
+def build_coverage_analysis(candidate_df, months=None):
+    """Count recorded plant-species evidence for the displayed months.
+
+    These are counts of selected plant records, not planting quantities,
+    canopy area, or flower abundance.
+    """
     rows = []
     for number, key in enumerate(MONTH_KEYS, start=1):
+        if months and number not in months:
+            continue
         flower = int(candidate_df[f"flower_{key}"].sum()) if f"flower_{key}" in candidate_df else 0
         fruit = int(candidate_df[f"fruit_{key}"].sum()) if f"fruit_{key}" in candidate_df else 0
         leaf = int(candidate_df[f"leaf_{key}"].sum()) if f"leaf_{key}" in candidate_df else 0
-        any_interest = int(candidate_df[[f"flower_{key}", f"fruit_{key}", f"leaf_{key}"]].any(axis=1).sum()) if not candidate_df.empty else 0
-        rows.append({"月份": MONTH_LABELS[number], "花": flower, "果": fruit, "葉": leaf, "任一觀賞特徵": any_interest})
+        review = candidate_df["needs_review"].map(normalize_boolean) if "needs_review" in candidate_df else pd.Series(False, index=candidate_df.index)
+        rows.append({
+            "月份": MONTH_LABELS[number], "花": flower, "果": fruit, "葉": leaf,
+            "花_需複查": int((review & candidate_df[f"flower_{key}"].map(normalize_boolean)).sum()) if f"flower_{key}" in candidate_df else 0,
+            "果_需複查": int((review & candidate_df[f"fruit_{key}"].map(normalize_boolean)).sum()) if f"fruit_{key}" in candidate_df else 0,
+            "葉_需複查": int((review & candidate_df[f"leaf_{key}"].map(normalize_boolean)).sum()) if f"leaf_{key}" in candidate_df else 0,
+        })
     return pd.DataFrame(rows)
 
 

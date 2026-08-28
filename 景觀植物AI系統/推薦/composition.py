@@ -69,6 +69,58 @@ def _seasonal_evidence(row, filters):
     return {"by_part": by_part, "matched_months": matched_months, "coverage": coverage, "text": evidence_text}
 
 
+def _composition_seasonal_coverage(rows, filters):
+    """Describe coverage by the selected *group*, never by assumption."""
+    requested_months = sorted(set(filters.get("months", [])))
+    if not requested_months:
+        return {
+            "requested_months": [], "covered_months": [], "uncovered_months": [],
+            "is_complete": None, "status": "未指定月份，不判定季節覆蓋。",
+        }
+    covered_months = sorted({
+        month
+        for row in rows
+        for month in _seasonal_evidence(row, filters)["matched_months"]
+    })
+    uncovered_months = [month for month in requested_months if month not in covered_months]
+    complete = not uncovered_months
+    return {
+        "requested_months": requested_months,
+        "covered_months": covered_months,
+        "uncovered_months": uncovered_months,
+        "is_complete": complete,
+        "status": "整組植物共同完整覆蓋指定月份" if complete else "整組植物僅部分覆蓋指定月份",
+    }
+
+
+def _choose_month_coverage_rows(remaining, selected_rows, roles, filters, requested_count):
+    """Use remaining slots to fill months missing from the selected group."""
+    if not filters.get("requires_full_month_coverage") or not filters.get("months"):
+        return remaining
+    while len(selected_rows) < requested_count:
+        coverage = _composition_seasonal_coverage(selected_rows, filters)
+        missing = set(coverage["uncovered_months"])
+        if not missing:
+            break
+        best_row, best_gain = None, 0
+        for _, row in remaining.iterrows():
+            gain = len(missing.intersection(_seasonal_evidence(row, filters)["matched_months"]))
+            if gain > best_gain:
+                best_row, best_gain = row, gain
+        if best_row is None:
+            break
+        selected_rows.append(best_row)
+        roles[as_text(best_row.get("plant_id"))] = _role_data(
+            best_row,
+            "季節銜接候選",
+            "依缺少月份作群植或重複配置",
+            "補足整體組合尚未覆蓋的指定月份，讓季相由不同植物共同接續。",
+            filters,
+        )
+        remaining = remaining.drop(index=best_row.name)
+    return remaining
+
+
 def _role_for_remaining(row, filters):
     layer = landscape_layer(row)
     evidence = _seasonal_evidence(row, filters)
@@ -179,6 +231,10 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
     if not filters.get("requires_water_feature"):
         remaining = remaining.loc[~remaining.apply(_is_water_feature, axis=1)].copy()
     selected_rows, roles, unfilled_roles = [], {}, []
+    theme_filters = {
+        **filters,
+        "months": filters.get("theme_months") or filters.get("months", []),
+    }
 
     # A named plant is the non-negotiable theme plant.  It must appear in the
     # proposal, while other candidates can still complete the planting layers.
@@ -194,7 +250,7 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
             f"主題植物／{layer}季節焦點候選",
             "作為視覺焦點並與其他層次重複或群植配置",
             purpose,
-            filters,
+            theme_filters,
         )
         selected_rows.append(row)
         remaining = remaining.drop(index=row.name)
@@ -210,6 +266,10 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
         selected_rows.append(row)
         roles[as_text(row.get("plant_id"))] = _role_data(row, role, pattern, purpose, filters)
         remaining = remaining.drop(index=row.name)
+
+    # Keep structural layers first, then use open slots to let several plants
+    # jointly cover a requested season.
+    remaining = _choose_month_coverage_rows(remaining, selected_rows, roles, filters, requested_count)
 
     seasonal_matches = remaining[remaining.apply(lambda row: _matches_requested_season(row, filters), axis=1)]
     if not seasonal_matches.empty and len(selected_rows) < requested_count:
@@ -241,6 +301,7 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
     selected = selected.sort_values("_composition_order").drop(columns="_composition_order")
     ordered_rows = [selected.loc[selected["plant_id"].map(as_text) == plant_id].iloc[0] for plant_id in selected_ids]
     _add_collaboration_guidance(ordered_rows, roles)
+    seasonal_coverage = _composition_seasonal_coverage(ordered_rows, filters)
 
     missing_text = "、".join(unfilled_roles)
     review_names = selected.loc[selected["needs_review"].map(normalize_boolean), "chinese_name"].map(as_text).tolist()
@@ -253,6 +314,9 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
         data_limit += "需要人工複查的植物：" + "、".join(review_names) + "。"
     if missing_text:
         data_limit += f"候選資料未找到可擔任{missing_text}的植物，因此未強行補足。"
+    if filters.get("requires_full_month_coverage") and not seasonal_coverage["is_complete"]:
+        uncovered = "、".join(f"{month}月" for month in seasonal_coverage["uncovered_months"])
+        data_limit += f"本次選入植物未能共同覆蓋：{uncovered}；不可宣稱完整季節表現。"
     quality = {
         "total": len(selected),
         "high_confidence": int((selected["confidence"].map(as_text).str.casefold() == "high").sum()),
@@ -266,6 +330,7 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
         "unfilled_roles": unfilled_roles,
         "data_limit": data_limit,
         "quality": quality,
+        "seasonal_coverage": seasonal_coverage,
         "items": [
             {
                 "chinese_name": as_text(row.get("chinese_name")),

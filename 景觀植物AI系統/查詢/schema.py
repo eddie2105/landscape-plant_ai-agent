@@ -11,6 +11,10 @@ FILTER_LIST_FIELDS = (
 DEFAULT_FILTERS = {
     "months": [], "ornamental_parts": [], "plant_types": [], "growth_forms": [],
     "flower_colors": [], "fruit_colors": [], "leaf_colors": [], "confidence": [], "plant_name_terms": [],
+    # Months that apply specifically to a named theme plant.  They are kept
+    # separate from the planting-composition season when a question contains
+    # more than one seasonal requirement.
+    "theme_months": [],
     "requires_year_round_interest": False, "requires_seasonal_change": False,
     "exclude_needs_review": False, "requested_count": 8, "user_intent_summary": "",
     "requires_composition": False,
@@ -66,6 +70,20 @@ UNSUPPORTED_TERM_LABELS = {
 DESIGN_PALETTES = {
     "香檳色": ["乳白", "白", "黃", "金黃"],
 }
+
+
+def new_default_filters():
+    """Return an independent filter object for one query.
+
+    ``DEFAULT_FILTERS`` remains a read-only schema/template for callers that
+    import it.  Query code must use this factory because several fields are
+    lists; a shallow ``dict.copy()`` would otherwise let one request leak
+    conditions into the next request.
+    """
+    return {
+        key: list(value) if isinstance(value, list) else value
+        for key, value in DEFAULT_FILTERS.items()
+    }
 PLANT_NAME_ALIASES = {
     # A user asking for cherry blossom normally means the genus/name concept,
     # not a value in the plant_type column.
@@ -99,6 +117,7 @@ __all__ = [
     "MONTH_FIELD_PREFIXES",
     "FILTER_LIST_FIELDS",
     "DEFAULT_FILTERS",
+    "new_default_filters",
     "SCORE_WEIGHTS",
     "FINAL_REMINDER",
     "PLANTING_DESIGN_FRAMEWORK",

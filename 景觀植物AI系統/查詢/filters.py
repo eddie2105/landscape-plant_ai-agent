@@ -17,6 +17,7 @@ from .schema import (
     PLANT_NAME_ALIASES,
     SEASON_MONTHS,
     UNSUPPORTED_TERM_LABELS,
+    new_default_filters,
 )
 
 
@@ -41,11 +42,27 @@ def _months_from_question(question):
     return sorted(months)
 
 
+def _theme_months_from_question(text):
+    """Find months attached to a named plant in the same clause.
+
+    For example, in ``夏天的庭院，春天想要有櫻花`` the summer months
+    describe the composition while the spring months specifically qualify the
+    cherry blossom theme.  This is intentionally deterministic and only uses
+    known name aliases.
+    """
+    theme_months = set()
+    clauses = re.split(r"[，,。；;]\s*", text)
+    for clause in clauses:
+        if any(name in clause for name in PLANT_NAME_ALIASES):
+            theme_months.update(_months_from_question(clause))
+    return sorted(theme_months)
+
+
 def extract_known_filters(question, options):
     """Translate common everyday terms before asking the model for remaining intent."""
     text = as_text(question)
     normalized_text = text.replace("粉色", "粉紅色").replace("橙色", "橘色")
-    filters = DEFAULT_FILTERS.copy()
+    filters = new_default_filters()
     filters["months"] = _months_from_question(normalized_text)
     for part, words in (("花", ("花", "開花", "花期")), ("果", ("果", "果實", "結果")), ("葉", ("葉", "葉色", "觀葉"))):
         if any(word in normalized_text for word in words):
@@ -60,6 +77,14 @@ def extract_known_filters(question, options):
     for name in options.get("plant_names", []):
         if name in normalized_text and name not in filters["plant_name_terms"]:
             filters["plant_name_terms"].append(name)
+
+    filters["theme_months"] = _theme_months_from_question(normalized_text) if filters["plant_name_terms"] else []
+    # When the named plant has its own season and another season remains in
+    # the question, keep that other season as the composition requirement.
+    # A single-season request (for example, "spring cherry garden") continues
+    # to apply the same months to both levels.
+    if filters["theme_months"] and len(filters["months"]) > len(filters["theme_months"]):
+        filters["months"] = [month for month in filters["months"] if month not in filters["theme_months"]]
 
     for phrase, plant_type in PLAIN_LANGUAGE_TYPE_ALIASES.items():
         if phrase == "樹" and filters["plant_name_terms"]:
@@ -97,7 +122,8 @@ def extract_known_filters(question, options):
 
 def merge_known_and_ai_filters(ai_filters, known_filters):
     """Known everyday terms are deterministic; AI only fills what the user did not say plainly."""
-    merged = {**DEFAULT_FILTERS, **ai_filters}
+    merged = new_default_filters()
+    merged.update(ai_filters)
     for field in FILTER_LIST_FIELDS:
         if known_filters.get(field):
             merged[field] = known_filters[field]
@@ -108,6 +134,7 @@ def merge_known_and_ai_filters(ai_filters, known_filters):
     # parser invent one; it must be found in the user's wording/known aliases,
     # or be separately verified by the keyword-lookup fallback.
     merged["plant_name_terms"] = known_filters.get("plant_name_terms", [])
+    merged["theme_months"] = known_filters.get("theme_months", [])
     if known_filters.get("plant_name_terms") and not known_filters.get("plant_types"):
         # Do not let the general parser turn a name such as ``松樹`` into an
         # all-candidates-must-be-trees filter. Manual sidebar choices remain
@@ -150,8 +177,8 @@ plant_name_terms 只放使用者明確點名的植物中文名、學名、屬名
         input=[{"role": "system", "content": prompt}, {"role": "user", "content": question}],
         timeout=30,
     )
-    parsed = _parse_json(response.output_text, DEFAULT_FILTERS.copy())
-    filters = DEFAULT_FILTERS.copy()
+    parsed = _parse_json(response.output_text, new_default_filters())
+    filters = new_default_filters()
     for field in FILTER_LIST_FIELDS:
         value = parsed.get(field, [])
         filters[field] = value if isinstance(value, list) else []
@@ -195,7 +222,8 @@ def suggest_plant_search_terms(question, api_key, model, client=None):
 
 
 def merge_ai_and_manual_filters(ai_filters, manual_filters):
-    merged = {**DEFAULT_FILTERS, **ai_filters}
+    merged = new_default_filters()
+    merged.update(ai_filters)
     for field in FILTER_LIST_FIELDS:
         manual_value = manual_filters.get(field, [])
         if manual_value:
@@ -210,6 +238,7 @@ def merge_ai_and_manual_filters(ai_filters, manual_filters):
 __all__ = [
     "COLOR_ALIASES",
     "DEFAULT_FILTERS",
+    "new_default_filters",
     "DESIGN_PALETTES",
     "DESIGN_STYLE_PROFILES",
     "FILTER_LIST_FIELDS",

@@ -30,6 +30,7 @@ from 景觀植物AI系統.查詢.filters import (
     merge_known_and_ai_filters,
     parse_question_to_filters,
     suggest_plant_search_terms,
+    new_default_filters,
 )
 from 景觀植物AI系統.查詢.search import apply_filters, find_relaxed_candidates
 from 景觀植物AI系統.資料.matrix_loader import load_matrix as _load_matrix
@@ -40,7 +41,7 @@ from 景觀植物AI系統.設定.settings import (
 )
 
 
-QUERY_LOGIC_VERSION = "2026-08-14-theme-always-composes-v6"
+QUERY_LOGIC_VERSION = "2026-08-28-traceable-season-and-name-v7"
 EXAMPLE_QUESTIONS = [
     "我想找春天開粉紅花的灌木。",
     "秋天有果實的樹有哪些？",
@@ -131,6 +132,8 @@ def describe_applied_filters(filters):
     descriptions = []
     if filters.get("months"):
         descriptions.append("月份：" + "、".join(f"{month}月" for month in filters["months"]))
+    if filters.get("theme_months"):
+        descriptions.append("指定主題植物月份：" + "、".join(f"{month}月" for month in filters["theme_months"]))
     if filters.get("ornamental_parts"):
         descriptions.append("觀賞重點：" + "、".join(filters["ornamental_parts"]))
     labels = {"plant_name_terms": "指定植物名稱", "plant_types": "植物型態", "growth_forms": "生長型態", "flower_colors": "花色", "fruit_colors": "果色", "leaf_colors": "葉色"}
@@ -155,7 +158,8 @@ def describe_applied_filters(filters):
 def render_results(result):
     candidates = result["candidates"]
     selected = result["selected"]
-    coverage = build_coverage_analysis(selected)
+    requested_months = result["filters"].get("months", [])
+    coverage = build_coverage_analysis(selected, months=requested_months or None)
     st.subheader("植栽建議與景觀提案")
     if result.get("answer"):
         if result.get("has_composition"):
@@ -174,6 +178,12 @@ def render_results(result):
                 use_container_width=True,
             )
         quality = (result.get("composition") or {}).get("quality", {})
+        seasonal_coverage = (result.get("composition") or {}).get("seasonal_coverage", {})
+        if result["filters"].get("requires_full_month_coverage"):
+            covered = "、".join(f"{month}月" for month in seasonal_coverage.get("covered_months", [])) or "無"
+            missing = "、".join(f"{month}月" for month in seasonal_coverage.get("uncovered_months", [])) or "無"
+            message = f"整組季節覆蓋：已確認 {covered}；未覆蓋 {missing}。"
+            (st.success if seasonal_coverage.get("is_complete") else st.warning)(message)
         if quality.get("all_need_review"):
             st.error("資料品質限制：本次配置的植物全數需要人工複查；本結果僅可用於設計初選，不可直接作為定案依據。")
         elif quality.get("needs_review"):
@@ -189,6 +199,21 @@ def render_results(result):
             "找不到符合指定植物名稱的資料，因此沒有自動改用其他植物或建立替代配置。"
             "若要看非指定植物的替代候選，請在問題中明確表示「可以看替代植物」。"
         )
+    suggestion = result.get("keyword_suggestion")
+    if suggestion:
+        terms = suggestion.get("terms", [])
+        st.info(
+            "AI 找到可對應資料表的搜尋詞："
+            + "、".join(terms)
+            + f"（可找到 {suggestion.get('match_count', 0)} 筆）。系統尚未替換你的原始指定植物。"
+        )
+        if suggestion.get("interpretation"):
+            st.caption("AI 關鍵字解讀：" + suggestion["interpretation"])
+        if st.button("採用這組搜尋詞，重新生成提案", key="confirm_keyword_suggestion"):
+            st.session_state["confirmed_keyword_question"] = result.get("question", "")
+            st.session_state["confirmed_keyword_terms"] = terms
+            st.session_state.pop("matrix_result", None)
+            st.success("已採用搜尋詞；請按「生成植栽建議」重新查詢。")
     if result.get("ai_keyword_interpretation"):
         st.info("AI 關鍵字辨識：" + result["ai_keyword_interpretation"] + "；系統僅採用資料表實際命中的植物。")
     if result["filters"].get("requires_composition"):
@@ -209,11 +234,33 @@ def render_results(result):
         st.subheader("12 個月季節矩陣")
         st.caption("花、果、葉為資料表中的實際月份標記；- 代表該月無資料。")
         st.dataframe(build_seasonal_matrix(selected), hide_index=True, use_container_width=True)
-        st.subheader("月份覆蓋分析")
-        chart_data = coverage.melt("月份", var_name="觀賞特徵", value_name="植物數")
-        st.altair_chart(alt.Chart(chart_data).mark_line(point=True).encode(x="月份:N", y="植物數:Q", color="觀賞特徵:N", tooltip=["月份", "觀賞特徵", "植物數"]).properties(height=280), use_container_width=True)
-        weak = coverage.loc[coverage["任一觀賞特徵"] == 0, "月份"].tolist()
-        st.info(f"整體觀賞性沒有覆蓋的月份：{'、'.join(weak) if weak else '無'}")
+        st.subheader("指定月份的季節觀賞紀錄")
+        st.caption("柱高為本次選入、具有該月資料紀錄的植物筆數；不是株數、花量或實際配置面積。同一植物可同時有花、果、葉紀錄。")
+        chart_data = coverage.melt(
+            "月份", value_vars=["花", "果", "葉"], var_name="觀賞特徵", value_name="植物數"
+        )
+        review_data = coverage.melt(
+            "月份", value_vars=["花_需複查", "果_需複查", "葉_需複查"], value_name="需複查植物數"
+        )
+        review_data["觀賞特徵"] = review_data["variable"].str.replace("_需複查", "", regex=False)
+        chart_data = chart_data.merge(
+            review_data[["月份", "觀賞特徵", "需複查植物數"]], on=["月份", "觀賞特徵"], how="left"
+        )
+        chart = alt.Chart(chart_data).mark_bar().encode(
+            x=alt.X("月份:O", title="月份"),
+            xOffset="觀賞特徵:N",
+            y=alt.Y("植物數:Q", title="有資料紀錄的選入植物筆數", scale=alt.Scale(zero=True)),
+            color=alt.Color(
+                "觀賞特徵:N", title="觀賞特徵",
+                scale=alt.Scale(domain=["花", "果", "葉"], range=["#e76f51", "#e9c46a", "#4f772d"]),
+            ),
+            tooltip=["月份", "觀賞特徵", "植物數", "需複查植物數"],
+        ).properties(height=300)
+        st.altair_chart(chart, use_container_width=True)
+        requested_parts = result["filters"].get("ornamental_parts") or ["花", "果", "葉"]
+        weak = coverage.loc[coverage[requested_parts].sum(axis=1) == 0, "月份"].tolist()
+        scope = "指定月份" if requested_months else "12 個月份"
+        st.info(f"{scope}中，沒有符合查詢觀賞重點紀錄的月份：{'、'.join(weak) if weak else '無'}")
     review_count = int(selected["needs_review"].sum()) if not selected.empty else 0
     if review_count:
         st.warning(f"資料品質提醒：本次推薦有 {review_count} 筆需要人工複查；請將月份資訊視為待驗證資料。")
@@ -240,8 +287,16 @@ def render_app():
         if not question.strip():
             st.warning("請先輸入問題。")
         else:
+            confirmed_terms = []
+            if st.session_state.get("confirmed_keyword_question") == question.strip():
+                confirmed_terms = st.session_state.get("confirmed_keyword_terms", [])
             cache_key = json.dumps(
-                {"version": QUERY_LOGIC_VERSION, "question": question.strip(), "filters": manual_filters},
+                {
+                    "version": QUERY_LOGIC_VERSION,
+                    "question": question.strip(),
+                    "filters": manual_filters,
+                    "confirmed_terms": confirmed_terms,
+                },
                 ensure_ascii=False,
                 sort_keys=True,
             )
@@ -257,9 +312,13 @@ def render_app():
                 with st.spinner("正在解析問題與整理資料..."):
                     ai_filters = parse_question_to_filters(question, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
             except Exception:
-                ai_filters = DEFAULT_FILTERS.copy()
+                ai_filters = new_default_filters()
                 st.info("AI 條件解析暫時不可用，已改以側欄條件進行查詢。")
             applied = merge_ai_and_manual_filters(merge_known_and_ai_filters(ai_filters, known_filters), manual_filters)
+            # These terms are only applied after the user explicitly clicks
+            # the confirmation control shown with an AI suggestion.
+            if confirmed_terms:
+                applied["plant_name_terms"] = confirmed_terms
             valid_options = {
                 "plant_types": options["plant_types"],
                 "growth_forms": options["growth_forms"],
@@ -275,34 +334,51 @@ def render_app():
             )
             if has_composition:
                 applied["requires_composition"] = True
-            named_candidate_df = apply_filters(matrix_df, applied)
+            named_filters = {
+                **applied,
+                "months": applied.get("theme_months") or applied.get("months", []),
+            }
+            named_candidate_df = apply_filters(matrix_df, named_filters)
             named_theme_lookup = "主題" in question and not applied.get("plant_name_terms")
             hard_filter_no_match = bool(applied.get("plant_name_terms")) and named_candidate_df.empty
+            # The general parser may flag an unfamiliar name in the user's
+            # wording.  It only triggers a verified suggestion flow; it never
+            # becomes a search constraint without confirmation.
+            ai_name_request = bool(ai_filters.get("plant_name_terms")) and not applied.get("plant_name_terms")
             ai_keyword_interpretation = ""
-            if (hard_filter_no_match or named_theme_lookup) and settings.get("OPENAI_API_KEY"):
+            keyword_suggestion = None
+            if (hard_filter_no_match or named_theme_lookup or ai_name_request) and settings.get("OPENAI_API_KEY"):
                 try:
                     keyword_result = suggest_plant_search_terms(question, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
                     suggested_terms = keyword_result["terms"]
                     if suggested_terms:
-                        suggested_filters = {**applied, "plant_name_terms": suggested_terms}
+                        suggested_filters = {**named_filters, "plant_name_terms": suggested_terms}
                         suggested_matches = apply_filters(matrix_df, suggested_filters)
                         if not suggested_matches.empty:
-                            applied["plant_name_terms"] = suggested_terms
-                            named_candidate_df = suggested_matches
-                            hard_filter_no_match = False
-                            ai_keyword_interpretation = keyword_result["interpretation"] or ("將需求理解為：" + "、".join(suggested_terms))
-                        elif named_theme_lookup:
+                            keyword_suggestion = {"terms": suggested_terms, "interpretation": keyword_result["interpretation"], "match_count": len(suggested_matches)}
+                            # The verified matches remain a suggestion until the user confirms it.
                             hard_filter_no_match = True
-                    elif named_theme_lookup:
+                            ai_keyword_interpretation = keyword_result["interpretation"] or ("將需求理解為：" + "、".join(suggested_terms))
+                        elif named_theme_lookup or ai_name_request:
+                            hard_filter_no_match = True
+                    elif named_theme_lookup or ai_name_request:
                         hard_filter_no_match = True
                 except Exception:
-                    if named_theme_lookup:
+                    if named_theme_lookup or ai_name_request:
                         hard_filter_no_match = True
             support_filters = {**applied, "plant_name_terms": []}
             candidates = score_candidates(
                 apply_filters(matrix_df, support_filters) if applied.get("plant_name_terms") else named_candidate_df,
                 support_filters,
             )
+            # A named theme plant may intentionally belong to a different
+            # season from the supporting composition (for example, spring
+            # cherry blossom in a summer garden).  Keep its verified record in
+            # the candidate pool so ``build_composition`` can preserve it.
+            if applied.get("plant_name_terms") and not named_candidate_df.empty:
+                named_scored = score_candidates(named_candidate_df, named_filters)
+                candidates = pd.concat([named_scored, candidates], ignore_index=True)
+                candidates = candidates.drop_duplicates(subset="plant_id", keep="first")
             approximation_note = ""
             if candidates.empty and not hard_filter_no_match:
                 relaxed_candidates, relaxed_field = find_relaxed_candidates(matrix_df, applied)
@@ -336,7 +412,7 @@ def render_app():
                                 answer = "AI 回答出現無法回溯至候選資料的 plant_id，因此未採用文字回答；以下顯示 Python 篩選與排序結果。"
                 except Exception:
                     st.info("AI 回答暫時不可用，已顯示可追溯的篩選結果。")
-            st.session_state["matrix_result"] = {"cache_key": cache_key, "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition and not hard_filter_no_match, "composition": composition, "approximation_note": approximation_note, "hard_filter_no_match": hard_filter_no_match, "ai_keyword_interpretation": ai_keyword_interpretation}
+            st.session_state["matrix_result"] = {"cache_key": cache_key, "question": question.strip(), "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition and not hard_filter_no_match, "composition": composition, "approximation_note": approximation_note, "hard_filter_no_match": hard_filter_no_match, "ai_keyword_interpretation": ai_keyword_interpretation, "keyword_suggestion": keyword_suggestion}
     if "matrix_result" in st.session_state:
         render_results(st.session_state["matrix_result"])
 
