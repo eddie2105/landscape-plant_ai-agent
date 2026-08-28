@@ -31,6 +31,66 @@ class ReliabilityGuardTests(unittest.TestCase):
         self.assertEqual([3, 4, 5], filters["theme_months"])
         self.assertEqual(["櫻花", "Prunus"], filters["plant_name_terms"])
 
+    def test_theme_without_its_own_season_does_not_inherit_summer_filter(self):
+        options = {"plant_names": [], "plant_types": ["喬木"], "flower_colors": []}
+        filters = _filters.extract_known_filters("幫我規劃一組夏天有變化的庭院植物，然後要有櫻花", options)
+        plants = _normalizer.normalize_matrix_data(pd.DataFrame([
+            {"plant_id": "cherry", "chinese_name": "山櫻花", "scientific_name": "Prunus campanulata", "ornamental_part": "花", "flower_mar": True, "needs_review": False},
+            {"plant_id": "summer", "chinese_name": "夏季植物", "flower_jul": True, "needs_review": False},
+        ]))
+        named_filters = {**filters, "months": filters["theme_months"]}
+
+        named = _search.apply_filters(plants, named_filters)
+
+        self.assertEqual([6, 7, 8], filters["months"])
+        self.assertEqual([], filters["theme_months"])
+        self.assertTrue(filters["requires_seasonal_change"])
+        self.assertTrue(filters["theme_plant_requirements"][0]["required"])
+        self.assertEqual(["cherry"], named["plant_id"].tolist())
+
+    def test_named_tree_does_not_inherit_companion_shrub_type(self):
+        options = {
+            "plant_names": ["鳳凰木"],
+            "plant_types": ["喬木", "灌木"],
+            "flower_colors": [],
+        }
+        filters = _filters.extract_known_filters("春天有開花的灌木，然後搭配一棵鳳凰木", options)
+        requirement = filters["theme_plant_requirements"][0]
+
+        self.assertEqual([3, 4, 5], filters["months"])
+        self.assertEqual(["花"], filters["ornamental_parts"])
+        self.assertEqual(["灌木"], filters["plant_types"])
+        self.assertEqual([], requirement["months"])
+        self.assertEqual([], requirement["ornamental_parts"])
+        self.assertEqual([], requirement["plant_types"])
+
+    def test_explicit_theme_modifiers_stay_attached_to_theme(self):
+        options = {
+            "plant_names": ["鳳凰木"],
+            "plant_types": ["喬木", "灌木"],
+            "flower_colors": [],
+        }
+        filters = _filters.extract_known_filters("春天開花的灌木鳳凰木庭院", options)
+        requirement = filters["theme_plant_requirements"][0]
+
+        self.assertEqual([3, 4, 5], requirement["months"])
+        self.assertEqual(["花"], requirement["ornamental_parts"])
+        self.assertEqual(["灌木"], requirement["plant_types"])
+
+    def test_multiple_named_themes_are_kept_as_separate_requirements(self):
+        options = {
+            "plant_names": [],
+            "plant_types": ["喬木", "灌木"],
+            "flower_colors": [],
+        }
+        filters = _filters.extract_known_filters("夏天的庭院，另外想要櫻花和松樹", options)
+        requirements = filters["theme_plant_requirements"]
+
+        self.assertEqual(2, len(requirements))
+        self.assertEqual(["櫻花", "松樹"], [item["phrase"] for item in requirements])
+        self.assertTrue(all(item["max_required"] == 1 for item in requirements))
+        self.assertTrue(all(item["months"] == [] for item in requirements))
+
     def test_explicit_name_from_user_wins_over_ai_parser_name(self):
         known = _schema.new_default_filters()
         known["plant_name_terms"] = ["梅花", "Armeniaca mume"]
@@ -60,20 +120,30 @@ class ReliabilityGuardTests(unittest.TestCase):
         self.assertTrue(proposal["seasonal_coverage"]["is_complete"])
         self.assertEqual([], proposal["seasonal_coverage"]["uncovered_months"])
 
-    def test_chart_uses_requested_months_and_separate_evidence_types(self):
+    def test_heatmap_data_has_12_months_and_deduplicates_plant_ids(self):
         plants = _normalizer.normalize_matrix_data(pd.DataFrame([
             {"plant_id": "one", "flower_mar": True, "fruit_mar": True, "needs_review": True},
+            {"plant_id": "one", "flower_mar": True, "needs_review": True},
             {"plant_id": "two", "leaf_apr": True, "needs_review": False},
         ]))
 
-        chart = _charts.build_coverage_analysis(plants, months=[3, 4])
+        chart = _charts.build_coverage_analysis(
+            plants, requested_months=[3, 4], requested_parts=["花"]
+        )
 
-        self.assertEqual(["3月", "4月"], chart["月份"].tolist())
-        self.assertEqual([1, 0], chart["花"].tolist())
-        self.assertEqual([1, 0], chart["果"].tolist())
-        self.assertEqual([0, 1], chart["葉"].tolist())
-        self.assertEqual([1, 0], chart["花_需複查"].tolist())
-        self.assertNotIn("任一觀賞特徵", chart.columns)
+        self.assertEqual(12, len(chart))
+        march = chart.loc[chart["月份"] == "3月"].iloc[0]
+        april = chart.loc[chart["月份"] == "4月"].iloc[0]
+        january = chart.loc[chart["月份"] == "1月"].iloc[0]
+        self.assertEqual(1, march["花"])
+        self.assertEqual(1, march["果"])
+        self.assertEqual(1, march["花_需複查"])
+        self.assertEqual(1, april["葉"])
+        self.assertEqual("是", march["查詢指定月份"])
+        self.assertEqual("否", january["查詢指定月份"])
+        self.assertEqual(0, january["花"])
+        self.assertEqual(0, january["果"])
+        self.assertEqual(0, january["葉"])
 
 
 if __name__ == "__main__":

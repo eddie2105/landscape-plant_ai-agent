@@ -159,7 +159,12 @@ def render_results(result):
     candidates = result["candidates"]
     selected = result["selected"]
     requested_months = result["filters"].get("months", [])
-    coverage = build_coverage_analysis(selected, months=requested_months or None)
+    requested_parts = result["filters"].get("ornamental_parts") or ["花", "果", "葉"]
+    coverage = build_coverage_analysis(
+        selected,
+        requested_months=requested_months,
+        requested_parts=requested_parts,
+    )
     st.subheader("植栽建議與景觀提案")
     if result.get("answer"):
         if result.get("has_composition"):
@@ -190,6 +195,20 @@ def render_results(result):
             st.warning(f"資料品質提醒：本次配置有 {quality['needs_review']} 筆需要人工複查；請先複核相關資料再定案。")
     st.subheader("本次查詢依據")
     st.write(describe_applied_filters(result["filters"]))
+    theme_requirements = result["filters"].get("theme_plant_requirements", [])
+    if theme_requirements:
+        composition_months = result["filters"].get("months", [])
+        composition_text = "、".join(f"{month}月" for month in composition_months) or "未指定月份"
+        theme_descriptions = []
+        for requirement in theme_requirements:
+            theme_name = requirement.get("phrase") or "、".join(requirement.get("terms", []))
+            theme_months = requirement.get("months", [])
+            if theme_months:
+                theme_text = "、".join(f"{month}月" for month in theme_months)
+                theme_descriptions.append(f"「{theme_name}」依 {theme_text} 與同子句條件查核")
+            else:
+                theme_descriptions.append(f"「{theme_name}」未被要求符合整體月份，依自身資料查核")
+        st.info(f"系統理解：整體配置以 {composition_text} 為條件；" + "；".join(theme_descriptions) + "，並保留於提案。")
     if result["filters"].get("unverified_terms"):
         st.info("目前資料無法確認：" + "、".join(result["filters"]["unverified_terms"]) + "。以下結果仍依可驗證條件提供。")
     if result.get("approximation_note"):
@@ -234,33 +253,63 @@ def render_results(result):
         st.subheader("12 個月季節矩陣")
         st.caption("花、果、葉為資料表中的實際月份標記；- 代表該月無資料。")
         st.dataframe(build_seasonal_matrix(selected), hide_index=True, use_container_width=True)
-        st.subheader("指定月份的季節觀賞紀錄")
-        st.caption("柱高為本次選入、具有該月資料紀錄的植物筆數；不是株數、花量或實際配置面積。同一植物可同時有花、果、葉紀錄。")
+        st.subheader("12個月季相分布熱圖")
+        st.caption("色彩深淺代表本次選入植物中，具有該月份花、果或葉紀錄的不重複植物數。此數值不是植栽株數、花量或實際配置面積；同一植物可能同時具有多種觀賞特徵。")
         chart_data = coverage.melt(
-            "月份", value_vars=["花", "果", "葉"], var_name="觀賞特徵", value_name="植物數"
+            id_vars=["月份序號", "月份", "查詢指定月份"],
+            value_vars=["花", "果", "葉"],
+            var_name="觀賞特徵",
+            value_name="植物數",
         )
         review_data = coverage.melt(
-            "月份", value_vars=["花_需複查", "果_需複查", "葉_需複查"], value_name="需複查植物數"
+            id_vars=["月份"],
+            value_vars=["花_需複查", "果_需複查", "葉_需複查"],
+            value_name="需複查植物數",
         )
         review_data["觀賞特徵"] = review_data["variable"].str.replace("_需複查", "", regex=False)
         chart_data = chart_data.merge(
-            review_data[["月份", "觀賞特徵", "需複查植物數"]], on=["月份", "觀賞特徵"], how="left"
+            review_data[["月份", "觀賞特徵", "需複查植物數"]],
+            on=["月份", "觀賞特徵"],
+            how="left",
         )
-        chart = alt.Chart(chart_data).mark_bar().encode(
-            x=alt.X("月份:O", title="月份"),
-            xOffset="觀賞特徵:N",
-            y=alt.Y("植物數:Q", title="有資料紀錄的選入植物筆數", scale=alt.Scale(zero=True)),
+        maximum = max(1, int(chart_data["植物數"].max()))
+        heatmap = alt.Chart(chart_data).mark_rect(stroke="#d1d5db", strokeWidth=1).encode(
+            x=alt.X("月份:O", title="月份", sort=[f"{month}月" for month in range(1, 13)]),
+            y=alt.Y("觀賞特徵:N", title="觀賞特徵", sort=["花", "果", "葉"]),
             color=alt.Color(
-                "觀賞特徵:N", title="觀賞特徵",
-                scale=alt.Scale(domain=["花", "果", "葉"], range=["#e76f51", "#e9c46a", "#4f772d"]),
+                "植物數:Q",
+                title="不重複植物數",
+                scale=alt.Scale(domain=[0, maximum], range=["#e5e7eb", "#14532d"]),
             ),
-            tooltip=["月份", "觀賞特徵", "植物數", "需複查植物數"],
-        ).properties(height=300)
-        st.altair_chart(chart, use_container_width=True)
-        requested_parts = result["filters"].get("ornamental_parts") or ["花", "果", "葉"]
-        weak = coverage.loc[coverage[requested_parts].sum(axis=1) == 0, "月份"].tolist()
-        scope = "指定月份" if requested_months else "12 個月份"
-        st.info(f"{scope}中，沒有符合查詢觀賞重點紀錄的月份：{'、'.join(weak) if weak else '無'}")
+            tooltip=["月份", "觀賞特徵", "植物數", "需複查植物數", "查詢指定月份"],
+        )
+        labels = alt.Chart(chart_data).mark_text(fontSize=14, fontWeight="bold").encode(
+            x=alt.X("月份:O", sort=[f"{month}月" for month in range(1, 13)]),
+            y=alt.Y("觀賞特徵:N", sort=["花", "果", "葉"]),
+            text=alt.Text("植物數:Q", format="d"),
+            color=alt.condition(alt.datum["植物數"] > maximum / 2, alt.value("white"), alt.value("#1f2937")),
+        )
+        st.altair_chart((heatmap + labels).properties(height=180), use_container_width=True)
+
+        st.markdown("#### 資料洞察")
+        weak = coverage.loc[coverage["指定觀賞特徵植物數"] == 0, "月份"].tolist()
+        if weak:
+            st.info(f"沒有指定觀賞特徵紀錄的月份：{'、'.join(weak)}")
+        else:
+            st.success("本次選入植物在12個月皆有至少一項季相紀錄。")
+        peak_count = int(coverage["指定觀賞特徵植物數"].max())
+        peak_months = coverage.loc[coverage["指定觀賞特徵植物數"] == peak_count, "月份"].tolist()
+        st.info(f"依查詢觀賞重點，不重複植物紀錄數最高的月份：{'、'.join(peak_months)}（{peak_count} 種）。")
+        review_base = coverage["指定觀賞特徵植物數"]
+        review_ratio = coverage["指定觀賞特徵需複查數"].div(review_base.where(review_base > 0)).fillna(0)
+        high_review = coverage.loc[review_ratio >= 0.5, "月份"].tolist()
+        if high_review:
+            st.warning(f"需要人工複查資料占比較高（至少 50%）的月份：{'、'.join(high_review)}。")
+        elif review_ratio.max() > 0:
+            highest_review = coverage.loc[review_ratio == review_ratio.max(), "月份"].tolist()
+            st.info(f"需要人工複查資料比例最高的月份：{'、'.join(highest_review)}（{review_ratio.max():.0%}）。")
+        else:
+            st.info("本次12個月的季相紀錄中，沒有需要人工複查的資料。")
     review_count = int(selected["needs_review"].sum()) if not selected.empty else 0
     if review_count:
         st.warning(f"資料品質提醒：本次推薦有 {review_count} 筆需要人工複查；請將月份資訊視為待驗證資料。")
@@ -334,13 +383,36 @@ def render_app():
             )
             if has_composition:
                 applied["requires_composition"] = True
-            named_filters = {
-                **applied,
-                "months": applied.get("theme_months") or applied.get("months", []),
-            }
-            named_candidate_df = apply_filters(matrix_df, named_filters)
+            theme_requirements = applied.get("theme_plant_requirements") or []
+            named_filter_specs, named_frames, missing_theme_requirements = [], [], []
+            if theme_requirements:
+                for requirement in theme_requirements:
+                    requirement_filters = {**applied}
+                    for field in (
+                        "months", "ornamental_parts", "plant_types", "growth_forms",
+                        "flower_colors", "fruit_colors", "leaf_colors",
+                    ):
+                        requirement_filters[field] = requirement.get(field, [])
+                    requirement_filters["plant_name_terms"] = requirement.get("terms", [])
+                    named_filter_specs.append(requirement_filters)
+                    requirement_matches = apply_filters(matrix_df, requirement_filters)
+                    if requirement_matches.empty:
+                        missing_theme_requirements.append(requirement)
+                        continue
+                    required_limit = max(1, int(requirement.get("max_required", 1)))
+                    named_frames.append(score_candidates(requirement_matches, requirement_filters).head(required_limit))
+                named_candidate_df = (
+                    pd.concat(named_frames, ignore_index=True).drop_duplicates(subset="plant_id", keep="first")
+                    if named_frames else matrix_df.iloc[0:0].copy()
+                )
+                named_filters = named_filter_specs[0]
+            else:
+                named_filters = {**applied}
+                named_candidate_df = apply_filters(matrix_df, named_filters)
             named_theme_lookup = "主題" in question and not applied.get("plant_name_terms")
-            hard_filter_no_match = bool(applied.get("plant_name_terms")) and named_candidate_df.empty
+            hard_filter_no_match = bool(applied.get("plant_name_terms")) and (
+                named_candidate_df.empty or bool(missing_theme_requirements)
+            )
             # The general parser may flag an unfamiliar name in the user's
             # wording.  It only triggers a verified suggestion flow; it never
             # becomes a search constraint without confirmation.
@@ -376,7 +448,7 @@ def render_app():
             # cherry blossom in a summer garden).  Keep its verified record in
             # the candidate pool so ``build_composition`` can preserve it.
             if applied.get("plant_name_terms") and not named_candidate_df.empty:
-                named_scored = score_candidates(named_candidate_df, named_filters)
+                named_scored = named_candidate_df if theme_requirements else score_candidates(named_candidate_df, named_filters)
                 candidates = pd.concat([named_scored, candidates], ignore_index=True)
                 candidates = candidates.drop_duplicates(subset="plant_id", keep="first")
             approximation_note = ""

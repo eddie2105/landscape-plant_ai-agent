@@ -42,7 +42,16 @@ def _months_from_question(question):
     return sorted(months)
 
 
-def _theme_months_from_question(text):
+def _requirement_clauses(text):
+    """Split common natural-language joins without interpreting plant facts."""
+    return [
+        clause.strip()
+        for clause in re.split(r"[，,。；;]|然後要有|另外想要|並且要有|且要有|包含|搭配|並有", text)
+        if clause.strip()
+    ]
+
+
+def _theme_months_from_question(text, named_phrases=None):
     """Find months attached to a named plant in the same clause.
 
     For example, in ``夏天的庭院，春天想要有櫻花`` the summer months
@@ -51,11 +60,60 @@ def _theme_months_from_question(text):
     known name aliases.
     """
     theme_months = set()
-    clauses = re.split(r"[，,。；;]\s*", text)
+    clauses = _requirement_clauses(text)
+    named_phrases = named_phrases or list(PLANT_NAME_ALIASES)
     for clause in clauses:
-        if any(name in clause for name in PLANT_NAME_ALIASES):
+        if any(name in clause for name in named_phrases):
             theme_months.update(_months_from_question(clause))
     return sorted(theme_months)
+
+
+def _find_named_terms(text, options):
+    """Return the literal phrases found in the question and their search terms."""
+    groups = []
+    for phrase, aliases in PLANT_NAME_ALIASES.items():
+        if phrase in text:
+            groups.append({"phrase": phrase, "terms": list(dict.fromkeys(aliases))})
+    for name in options.get("plant_names", []):
+        if name in text and not any(group["phrase"] in name for group in groups):
+            groups.append({"phrase": name, "terms": [name]})
+    phrases = list(dict.fromkeys(group["phrase"] for group in groups))
+    terms = list(dict.fromkeys(term for group in groups for term in group["terms"]))
+    return phrases, terms, groups
+
+
+def _without_named_phrases(text, phrases):
+    cleaned = text
+    for phrase in sorted(phrases, key=len, reverse=True):
+        cleaned = cleaned.replace(phrase, "")
+    return cleaned
+
+
+def _extract_ornamental_parts(text, named_phrases=()):
+    cleaned = _without_named_phrases(text, named_phrases)
+    parts = []
+    for part, words in (("花", ("花", "開花", "花期")), ("果", ("果", "果實", "結果")), ("葉", ("葉", "葉色", "觀葉"))):
+        if any(word in cleaned for word in words):
+            parts.append(part)
+    return parts
+
+
+def _extract_plant_types(text, options, named_phrases=()):
+    cleaned = _without_named_phrases(text, named_phrases)
+    for phrase, plant_type in PLAIN_LANGUAGE_TYPE_ALIASES.items():
+        if phrase in cleaned and plant_type in options.get("plant_types", []):
+            return [plant_type]
+    return []
+
+
+def _extract_flower_colors(text, options):
+    colors = []
+    for color in sorted(options.get("flower_colors", []), key=len, reverse=True):
+        if not color or color not in text.replace("色", ""):
+            continue
+        if not any(color in matched_color for matched_color in colors):
+            colors.append(color)
+    return colors if "花" in text else []
 
 
 def extract_known_filters(question, options):
@@ -63,46 +121,42 @@ def extract_known_filters(question, options):
     text = as_text(question)
     normalized_text = text.replace("粉色", "粉紅色").replace("橙色", "橘色")
     filters = new_default_filters()
-    filters["months"] = _months_from_question(normalized_text)
-    for part, words in (("花", ("花", "開花", "花期")), ("果", ("果", "果實", "結果")), ("葉", ("葉", "葉色", "觀葉"))):
-        if any(word in normalized_text for word in words):
-            filters["ornamental_parts"].append(part)
+    named_phrases, named_terms, named_groups = _find_named_terms(normalized_text, options)
+    clauses = _requirement_clauses(normalized_text)
+    theme_clauses = [clause for clause in clauses if any(phrase in clause for phrase in named_phrases)]
+    composition_clauses = [clause for clause in clauses if clause not in theme_clauses]
+    # If the question contains only one clause, its modifiers reasonably apply
+    # to both the overall planting and the named theme plant.  With multiple
+    # clauses, each side retains only its own modifiers.
+    composition_text = " ".join(composition_clauses) if composition_clauses else normalized_text
+    theme_text = " ".join(theme_clauses)
 
-    # Resolve named themes before generic type words.  For example, ``松樹``
-    # is a theme name, not an instruction that every support plant must be a
-    # tree; ``喬木``/``灌木`` remain explicit type constraints.
-    for phrase, aliases in PLANT_NAME_ALIASES.items():
-        if phrase in normalized_text:
-            filters["plant_name_terms"].extend(aliases)
-    for name in options.get("plant_names", []):
-        if name in normalized_text and name not in filters["plant_name_terms"]:
-            filters["plant_name_terms"].append(name)
-
-    filters["theme_months"] = _theme_months_from_question(normalized_text) if filters["plant_name_terms"] else []
-    # When the named plant has its own season and another season remains in
-    # the question, keep that other season as the composition requirement.
-    # A single-season request (for example, "spring cherry garden") continues
-    # to apply the same months to both levels.
-    if filters["theme_months"] and len(filters["months"]) > len(filters["theme_months"]):
-        filters["months"] = [month for month in filters["months"] if month not in filters["theme_months"]]
-
-    for phrase, plant_type in PLAIN_LANGUAGE_TYPE_ALIASES.items():
-        if phrase == "樹" and filters["plant_name_terms"]:
-            continue
-        if phrase in normalized_text and plant_type in options["plant_types"]:
-            filters["plant_types"] = [plant_type]
-            break
-
-    for color in sorted(options["flower_colors"], key=len, reverse=True):
-        if not color or color not in normalized_text.replace("色", ""):
-            continue
-        if any(color in matched_color for matched_color in filters["flower_colors"]):
-            continue
-        filters["flower_colors"].append(color)
-    if "花" not in normalized_text:
-        filters["flower_colors"] = []
+    filters["months"] = _months_from_question(composition_text)
+    filters["ornamental_parts"] = _extract_ornamental_parts(composition_text, named_phrases)
+    filters["plant_types"] = _extract_plant_types(composition_text, options, named_phrases)
+    filters["flower_colors"] = _extract_flower_colors(composition_text, options)
+    filters["plant_name_terms"] = named_terms
+    filters["theme_months"] = _months_from_question(theme_text) if named_terms else []
+    if named_terms:
+        for group in named_groups:
+            group_clauses = [clause for clause in clauses if group["phrase"] in clause]
+            group_text = " ".join(group_clauses)
+            filters["theme_plant_requirements"].append({
+                "phrase": group["phrase"],
+                "terms": group["terms"],
+                "months": _months_from_question(group_text),
+                "ornamental_parts": _extract_ornamental_parts(group_text, [group["phrase"]]),
+                "plant_types": _extract_plant_types(group_text, options, [group["phrase"]]),
+                "growth_forms": [],
+                "flower_colors": _extract_flower_colors(group_text, options),
+                "fruit_colors": [],
+                "leaf_colors": [],
+                "required": True,
+                "max_required": 2 if "主題" in group_text else 1,
+                "role": "主題植物",
+            })
     filters["requires_year_round_interest"] = any(word in normalized_text for word in ("四季", "全年", "整年"))
-    filters["requires_seasonal_change"] = any(word in normalized_text for word in ("季節變化", "四季變化"))
+    filters["requires_seasonal_change"] = any(word in composition_text for word in ("季節變化", "四季變化", "有變化", "會變化"))
     filters["requires_composition"] = any(word in normalized_text for word in ("庭院", "花園", "公園", "景觀", "搭配", "一組", "主題"))
     filters["requires_water_feature"] = any(word in normalized_text for word in ("水景", "水池", "池塘", "生態池", "濕地", "水生"))
     filters["requires_full_month_coverage"] = any(
@@ -135,6 +189,7 @@ def merge_known_and_ai_filters(ai_filters, known_filters):
     # or be separately verified by the keyword-lookup fallback.
     merged["plant_name_terms"] = known_filters.get("plant_name_terms", [])
     merged["theme_months"] = known_filters.get("theme_months", [])
+    merged["theme_plant_requirements"] = known_filters.get("theme_plant_requirements", [])
     if known_filters.get("plant_name_terms") and not known_filters.get("plant_types"):
         # Do not let the general parser turn a name such as ``松樹`` into an
         # all-candidates-must-be-trees filter. Manual sidebar choices remain

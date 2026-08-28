@@ -15,6 +15,7 @@ DEFAULT_FILTERS = {
     # separate from the planting-composition season when a question contains
     # more than one seasonal requirement.
     "theme_months": [],
+    "theme_plant_requirements": [],
     "requires_year_round_interest": False, "requires_seasonal_change": False,
     "exclude_needs_review": False, "requested_count": 8, "user_intent_summary": "",
     "requires_composition": False,

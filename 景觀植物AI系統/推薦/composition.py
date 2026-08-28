@@ -180,6 +180,22 @@ def _is_water_feature(row):
     return "水生" in text or "濕生" in text
 
 
+def _theme_requirement_for_row(row, filters):
+    chinese_name = as_text(row.get("chinese_name"))
+    scientific_name = as_text(row.get("scientific_name")).casefold()
+    for requirement in filters.get("theme_plant_requirements") or []:
+        for term in requirement.get("terms", []):
+            term = as_text(term)
+            if not term:
+                continue
+            if any("\u4e00" <= character <= "\u9fff" for character in term):
+                if term in chinese_name:
+                    return requirement
+            elif term.casefold() in scientific_name:
+                return requirement
+    return {}
+
+
 def _join_names(rows, layer):
     names = [as_text(row.get("chinese_name")) for row in rows if landscape_layer(row) == layer]
     return "、".join(filter(None, names)) or "目前未選入此層植物"
@@ -231,11 +247,6 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
     if not filters.get("requires_water_feature"):
         remaining = remaining.loc[~remaining.apply(_is_water_feature, axis=1)].copy()
     selected_rows, roles, unfilled_roles = [], {}, []
-    theme_filters = {
-        **filters,
-        "months": filters.get("theme_months") or filters.get("months", []),
-    }
-
     # A named plant is the non-negotiable theme plant.  It must appear in the
     # proposal, while other candidates can still complete the planting layers.
     for plant_id in required_plant_ids or []:
@@ -245,6 +256,14 @@ def build_composition(candidate_df, filters, required_plant_ids=None):
         row = named_rows.iloc[0]
         layer = landscape_layer(row)
         purpose = "保留使用者明確指定的植物作為方案主題"
+        theme_requirement = _theme_requirement_for_row(row, filters)
+        theme_filters = {**filters}
+        if theme_requirement:
+            for field in (
+                "months", "ornamental_parts", "plant_types", "growth_forms",
+                "flower_colors", "fruit_colors", "leaf_colors",
+            ):
+                theme_filters[field] = theme_requirement.get(field, [])
         roles[as_text(row.get("plant_id"))] = _role_data(
             row,
             f"主題植物／{layer}季節焦點候選",
