@@ -64,15 +64,24 @@ def generate_grounded_answer(question, applied_filters, candidate_context, api_k
     return as_text(response.output_text)
 
 
-def generate_design_proposal(question, applied_filters, candidate_context, api_key, model, client=None):
+def generate_design_proposal(question, applied_filters, candidate_context, api_key, model, composition=None, client=None):
+    # ``selected`` is a DataFrame used by the UI and cannot be JSON-encoded for
+    # the Responses API.  The model only needs the locked design metadata; its
+    # candidate facts are already supplied separately in ``candidate_context``.
+    composition_prompt_data = {
+        key: value
+        for key, value in (composition or {}).items()
+        if key != "selected"
+    }
     prompt = f"""你是景觀植栽設計提案助理。你可以對候選植物的搭配方式提出創意建議，
 但不得捏造植物的耐性、高度、基地適應性、生態功能或未提供的顏色與季節資料。
 你只能從候選資料中的 plant_id 選植物。花、果、葉、月份、信心程度與複查狀態的事實必須來自候選資料。
 
 {PLANTING_DESIGN_FRAMEWORK}
 
-景觀提案不得只有氣氛描述。你必須選出 6-8 株植物；候選不足時列出全部候選。
-每一株必須有中文名、學名、plant_id、景觀角色，以及候選資料中的花／果／葉色或季節依據。
+景觀提案不得只有氣氛描述。系統已先依園林規則建立「最終配置方案」；其中的 plant_id 就是本次提案唯一可用的植物清單。你必須逐一保留全部 plant_id 及其既定角色與順序，不得新增、刪除、替換或自行改選任何植物。
+每一株必須有中文名、學名、plant_id、系統既定的景觀角色，以及候選資料中的花／果／葉色或季節依據。
+不得宣稱香氣、生態功能、庭院適應性、成株高度、株距、日照、耐旱或資料表未列的植物特性。不得自行總結「全部無 needs_review」；資料品質由系統顯示。
 若 design_palette_name 有值，這是系統的設計色調翻譯；不得說資料原本標示該色調名稱。
 若 unverified_terms 有值，這些需求沒有可驗證欄位；不得因此說沒有候選植物，需在資料提醒中說明。
 
@@ -95,7 +104,7 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
 只能輸出下列 JSON，不要加任何說明：
 {{
   "answer": "完整的固定三段式 Markdown 回答，必須直接列出每株植物名稱與 plant_id",
-  "plant_ids": ["只能是候選資料內的 plant_id，6-8 筆；候選不足時可少於 6 筆"],
+  "plant_ids": ["必須與系統建立的配置方案 plant_id 完全相同，且順序相同"],
   "roles": [
     {{"plant_id": "候選 plant_id", "role": "主景/中層量體/前景/色彩焦點/背景等", "rationale": "只描述設計上的搭配角色，不宣稱未提供的植物事實"}}
   ],
@@ -106,11 +115,34 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
         model=model,
         input=[
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"使用者需求：{question}\n設計與篩選條件：{json.dumps(applied_filters, ensure_ascii=False)}\n最多可用的候選植物：{candidate_context}"},
+            {"role": "user", "content": f"使用者需求：{question}\n設計與篩選條件：{json.dumps(applied_filters, ensure_ascii=False)}\n系統建立的配置方案：{json.dumps(composition_prompt_data, ensure_ascii=False)}\n可用候選植物：{candidate_context}"},
         ],
         timeout=45,
     )
     return _parse_json(response.output_text, {})
+
+
+def generate_design_interpretation(question, composition, api_key, model, client=None):
+    """Write only a cautious design reading; Python renders all plant facts."""
+    prompt_data = {key: value for key, value in (composition or {}).items() if key != "selected"}
+    prompt = """你是景觀植栽設計助理。請以台灣繁體中文撰寫設計解讀，且不要自行加上「設計解讀」標題，
+只說明系統已確定的角色如何形成視覺層次、主從關係、群植或帶狀配置的方向。
+必須先用一段話說明整體主從關係，再以「各植物協作」小節逐一列出系統固定配置中的每一株中文名、固定角色、selection_evidence 欄的資料依據，以及 collaboration 欄提供的協作方式。植物名稱、角色、資料依據與協作方式不可遺漏、替換或改寫成其他植物事實。
+不得加入學名、plant_id、花果葉顏色、信心程度或 needs_review；這些事實由系統表格固定呈現。
+若系統條件中的 theme_months 與 months 不同，必須清楚區分「主題植物的季節」與「整體配置的季節」；可只引用 selection_evidence 已記錄的月份來說明兩者如何接續，絕不可說成所有植物同時符合兩個季節。
+若 theme_plant_requirements 存在但其 months 為空，代表使用者只要求保留主題植物，未要求它符合整體配置月份；必須依 selection_evidence 呈現其實際季相，不可把整體季節強加到該主題植物。
+不得新增任何植物事實，也不得宣稱適合庭院、可靠、完整、全期覆蓋、已確立、耐旱、日照、香氣、生態功能、株距或成株尺度。
+不可把使用者的季節需求說成每株植物都已涵蓋該期間；各植物實際月份以系統表格為準。不可把依型態推定的高、中、低層或主從關係說成資料表已證實的事實。
+若有缺層或資料限制，請以「候選資料仍需現地確認」的保守方式說明。只輸出 Markdown 文字，不要 JSON。"""
+    response = (client or OpenAI(api_key=api_key)).responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"使用者需求：{question}\n系統固定配置：{json.dumps(prompt_data, ensure_ascii=False)}"},
+        ],
+        timeout=45,
+    )
+    return as_text(response.output_text)
 
 
 def validate_design_proposal(proposal, candidate_df, fallback_df, requested_count):
@@ -152,11 +184,22 @@ def invalid_answer_plant_ids(answer, candidate_df):
     return sorted({plant_id for plant_id in mentioned if plant_id not in known_ids})
 
 
+def answer_uses_exact_composition(answer, selected_df, all_candidate_df):
+    """Ensure an AI proposal lists all and only the program-selected plants."""
+    expected_ids = {as_text(value) for value in selected_df.get("plant_id", [])}
+    all_ids = {as_text(value) for value in all_candidate_df.get("plant_id", [])}
+    text = as_text(answer)
+    mentioned_ids = {plant_id for plant_id in all_ids if plant_id and plant_id in text}
+    return bool(expected_ids) and mentioned_ids == expected_ids
+
+
 __all__ = [
     "FINAL_REMINDER",
     "PLANTING_DESIGN_FRAMEWORK",
     "generate_design_proposal",
+    "generate_design_interpretation",
     "generate_grounded_answer",
+    "answer_uses_exact_composition",
     "invalid_answer_plant_ids",
     "validate_design_proposal",
 ]

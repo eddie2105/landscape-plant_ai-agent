@@ -68,6 +68,7 @@ def build_filter_options(df):
         "flower_colors": extract_filter_options(df, "flower_color"),
         "fruit_colors": extract_filter_options(df, "fruit_color"),
         "leaf_colors": extract_filter_options(df, "leaf_color"),
+        "plant_names": sorted(filter(None, df.get("chinese_name", pd.Series(dtype=str)).map(as_text).unique()), key=len, reverse=True),
     }
 
 

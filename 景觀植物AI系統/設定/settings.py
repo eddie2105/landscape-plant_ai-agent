@@ -36,6 +36,9 @@ def disable_dead_local_proxy():
 def load_settings():
     """Load base app settings from .env."""
     load_dotenv()
+    # ``.env`` may itself define a stale local proxy.  Clear it *after*
+    # loading environment values, otherwise later API clients still inherit it.
+    disable_dead_local_proxy()
     return {
         "GOOGLE_SERVICE_ACCOUNT_FILE": os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE"),
         "PLANTS_SPREADSHEET_ID": os.getenv("PLANTS_SPREADSHEET_ID"),
