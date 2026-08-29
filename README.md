@@ -1,3 +1,14 @@
+---
+title: 景觀植物 AI 系統
+emoji: 🌿
+colorFrom: green
+colorTo: yellow
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: 以植物資料與季相視覺化輔助景觀植栽提案。
+---
+
 # 景觀植物 AI 系統
 
 這是一個以植物資料庫為基礎的景觀植栽提案工具。使用者用自然語言描述需求，系統會從植物清單中篩選候選植物，並產生可追溯的植栽建議與景觀搭配說明。
