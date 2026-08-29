@@ -140,6 +140,7 @@ class ReliabilityGuardTests(unittest.TestCase):
         self.assertEqual(1, march["花_需複查"])
         self.assertEqual(1, april["葉"])
         self.assertEqual("是", march["查詢指定月份"])
+        self.assertEqual("是", april["查詢指定月份"])
         self.assertEqual("否", january["查詢指定月份"])
         self.assertEqual(0, january["花"])
         self.assertEqual(0, january["果"])

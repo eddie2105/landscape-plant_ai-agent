@@ -43,10 +43,10 @@ from 景觀植物AI系統.設定.settings import (
 
 QUERY_LOGIC_VERSION = "2026-08-28-traceable-season-and-name-v7"
 EXAMPLE_QUESTIONS = [
-    "我想找春天開粉紅花的灌木。",
-    "秋天有果實的樹有哪些？",
-    "我想找四季都有變化的植物。",
-    "幫我規劃一組夏天有變化的庭院植物。",
+    "幫我規劃春天開粉紅花的庭院植栽。",
+    "我想找秋天有果實的喬木，作為公園步道背景。",
+    "幫我找四季都有花、果、葉變化的庭院植物。",
+    "幫我規劃夏天有變化、春天有櫻花的庭院。",
 ]
 
 
@@ -273,13 +273,23 @@ def render_results(result):
             how="left",
         )
         maximum = max(1, int(chart_data["植物數"].max()))
-        heatmap = alt.Chart(chart_data).mark_rect(stroke="#d1d5db", strokeWidth=1).encode(
+        heatmap = alt.Chart(chart_data).mark_rect().encode(
             x=alt.X("月份:O", title="月份", sort=[f"{month}月" for month in range(1, 13)]),
             y=alt.Y("觀賞特徵:N", title="觀賞特徵", sort=["花", "果", "葉"]),
             color=alt.Color(
                 "植物數:Q",
                 title="不重複植物數",
                 scale=alt.Scale(domain=[0, maximum], range=["#e5e7eb", "#14532d"]),
+            ),
+            stroke=alt.condition(
+                alt.datum["查詢指定月份"] == "是",
+                alt.value("#b8860b"),
+                alt.value("#d1d5db"),
+            ),
+            strokeWidth=alt.condition(
+                alt.datum["查詢指定月份"] == "是",
+                alt.value(3),
+                alt.value(1),
             ),
             tooltip=["月份", "觀賞特徵", "植物數", "需複查植物數", "查詢指定月份"],
         )
