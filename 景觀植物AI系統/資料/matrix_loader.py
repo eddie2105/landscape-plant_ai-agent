@@ -1,5 +1,6 @@
 """Matrix data loading helpers."""
 
+import json
 from pathlib import Path
 
 import gspread
@@ -13,9 +14,22 @@ from 景觀植物AI系統.資料.normalizer import normalize_matrix_data
 LOCAL_MATRIX_FALLBACK = Path("data/display_matrix_merged_preview.csv")
 
 
-def load_google_sheet(spreadsheet_id, worksheet_name, service_account_file):
+def load_google_sheet(
+    spreadsheet_id,
+    worksheet_name,
+    service_account_file,
+    service_account_json=None,
+):
     """Load a Google Sheets worksheet as a DataFrame while preserving string IDs."""
-    client = gspread.service_account(filename=service_account_file)
+    credential_json = str(service_account_json or "").strip()
+    if credential_json:
+        try:
+            credentials = json.loads(credential_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON") from exc
+        client = gspread.service_account_from_dict(credentials)
+    else:
+        client = gspread.service_account(filename=service_account_file)
     spreadsheet = client.open_by_key(spreadsheet_id)
     worksheet = spreadsheet.worksheet(worksheet_name)
     df = pd.DataFrame(worksheet.get_all_records(numericise_ignore=["all"]))
@@ -37,6 +51,7 @@ def load_matrix():
             settings["DISPLAY_MATRIX_MERGED_SPREADSHEET_ID"],
             settings["DISPLAY_MATRIX_MERGED_WORKSHEET_NAME"],
             settings["GOOGLE_SERVICE_ACCOUNT_FILE"],
+            settings.get("GOOGLE_SERVICE_ACCOUNT_JSON"),
         )
         return normalize_matrix_data(raw), "Google Sheets API"
     except Exception as exc:
