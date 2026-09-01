@@ -118,10 +118,9 @@ def render_plant_cards(df, roles=None):
         role = roles.get(row["plant_id"], {})
         role_label = role.get("role") or "推薦植物"
         with st.expander(f"{row['chinese_name']}｜{role_label}", expanded=False):
-            st.caption(f"學名：{row['scientific_name']}　｜　資料 ID：{row['plant_id']}")
+            st.caption(f"學名：{row['scientific_name']}")
             st.write(f"**型態：** {row['plant_type']}　**生長型態：** {row['growth_form']}")
             st.write(f"**花／果／葉色：** {row['flower_color'] or '-'}／{row['fruit_color'] or '-'}／{row['leaf_color'] or '-'}")
-            st.write(f"**符合原因：** {row['match_reasons']}　**匹配分數：** {row['match_score']}")
             st.write(f"**資料信心：** {row['confidence'] or '未標示'}")
             if role:
                 st.write(f"**景觀角色：** {role['role'] or '景觀搭配植物'}")
@@ -147,8 +146,6 @@ def build_proposal_overview(df, roles):
                 "選入的資料依據": role.get("selection_evidence", "資料表僅可確認型態"),
                 "植物": row["chinese_name"],
                 "型態": row["plant_type"],
-                "實際命中月份與部位": role.get("seasonal_evidence", {}).get("text", "未指定季節條件"),
-                "季節覆蓋": role.get("seasonal_evidence", {}).get("coverage", "未指定季節條件"),
                 "資料可確認的色彩": "；".join(color_evidence) or "色彩資料未提供",
                 "資料狀態": f"{role.get('confidence') or '未標示'}／{'需要人工複查' if role.get('needs_review') else '未標示需複查'}",
                 "與其他植栽的協作": role.get("collaboration", "系統尚未建立協作說明"),
@@ -216,8 +213,14 @@ def render_results(result):
             st.warning("目前沒有可用於搭配的候選植物。")
         else:
             overview = build_proposal_overview(selected, result.get("roles") or {})
+            layer_order = {"高層": 0, "中層": 1, "低層": 2, "其他型態": 3}
+            overview = (
+                overview.assign(_layer_order=overview["固定層次"].map(layer_order).fillna(4))
+                .sort_values("_layer_order", kind="stable")
+                .drop(columns="_layer_order")
+            )
             st.dataframe(
-                overview[["固定層次", "固定角色", "植物", "型態", "實際命中月份與部位", "資料狀態"]],
+                overview[["固定層次", "固定角色", "植物", "型態", "資料狀態"]],
                 hide_index=True,
                 use_container_width=True,
             )
@@ -279,8 +282,6 @@ def render_results(result):
         st.info("AI 關鍵字辨識：" + result["ai_keyword_interpretation"] + "；系統僅採用資料表實際命中的植物。")
     if result["filters"].get("requires_composition"):
         st.info("本案的高、中、低層與協作角色，是依植物型態建立的初步設計推定；實際株高、基地適應性與施工配置尚未驗證。")
-    with st.expander("查看查詢規則與原始條件", expanded=False):
-        st.json(result["filters"], expanded=False)
     st.subheader("推薦植物與季相證據")
     if selected.empty:
         st.warning("目前沒有完全符合的資料。可放寬月份、顏色或植物型態後再試。")
