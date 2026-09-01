@@ -124,10 +124,29 @@ answer 必須使用以下固定三段式 Markdown，並保留換行：
 
 def generate_design_interpretation(question, composition, api_key, model, client=None):
     """Write only a cautious design reading; Python renders all plant facts."""
-    prompt_data = {key: value for key, value in (composition or {}).items() if key != "selected"}
-    prompt = """你是景觀植栽設計助理。請以台灣繁體中文撰寫設計解讀，且不要自行加上「設計解讀」標題，
-只說明系統已確定的角色如何形成視覺層次、主從關係、群植或帶狀配置的方向。
-必須先用一段話說明整體主從關係，再以「各植物協作」小節逐一列出系統固定配置中的每一株中文名、固定角色、selection_evidence 欄的資料依據，以及 collaboration 欄提供的協作方式。植物名稱、角色、資料依據與協作方式不可遺漏、替換或改寫成其他植物事實。
+    composition = composition or {}
+    prompt_data = {
+        "設計概念": composition.get("design_concept", ""),
+        "尚未補足的層次": composition.get("unfilled_roles", []),
+        "配置植物": [
+            {
+                "植物": item.get("chinese_name", ""),
+                "層次": item.get("layer", ""),
+                "角色": item.get("role", ""),
+                "選入依據": item.get("selection_evidence", ""),
+                "配置協作": item.get("collaboration", ""),
+            }
+            for item in composition.get("items", [])
+        ],
+        "資料限制": composition.get("data_limit", ""),
+    }
+    prompt = """你是景觀植栽設計助理。請以台灣繁體中文撰寫精簡、自然、可直接閱讀的設計解讀。
+不要自行加上「設計解讀」標題，因為介面已經有標題。
+第一段用 3 至 5 句說明整體主從關係、高中低層如何銜接，以及群植或帶狀配置方向。
+接著使用「配置協作重點」小節，以 3 至 5 個短項目整理主題植物、高層與中層、低層、其他型態之間如何合作。相同功能的植物要合併描述，不要逐株重複相同的過渡文字。
+植物名稱可以自然寫入句子，但不得顯示或照抄任何程式欄位名稱，包括 selection_evidence、collaboration、plant_id、items、roles。
+「選入依據」只用來限制可引用的季節或觀賞事實；「配置協作」只用來整理空間關係，不要把這兩個名稱當成輸出標籤。
+主題植物必須明確指出；若某一層沒有植物，簡短說明該層仍待補足。
 不得加入學名、plant_id、花果葉顏色、信心程度或 needs_review；這些事實由系統表格固定呈現。
 若系統條件中的 theme_months 與 months 不同，必須清楚區分「主題植物的季節」與「整體配置的季節」；可只引用 selection_evidence 已記錄的月份來說明兩者如何接續，絕不可說成所有植物同時符合兩個季節。
 若 theme_plant_requirements 存在但其 months 為空，代表使用者只要求保留主題植物，未要求它符合整體配置月份；必須依 selection_evidence 呈現其實際季相，不可把整體季節強加到該主題植物。
@@ -142,7 +161,12 @@ def generate_design_interpretation(question, composition, api_key, model, client
         ],
         timeout=45,
     )
-    return as_text(response.output_text)
+    answer = as_text(response.output_text)
+    answer = re.sub(r"^\s*#{0,6}\s*設計解讀\s*\n?", "", answer, count=1)
+    answer = re.sub(r"\bselection_evidence\b\s*[：:]?", "選入依據：", answer, flags=re.IGNORECASE)
+    answer = re.sub(r"\bcollaboration\b\s*[：:]?", "配置協作：", answer, flags=re.IGNORECASE)
+    answer = re.sub(r"\bplant_id\b\s*[：:]?\s*[A-Za-z0-9_-]*", "", answer, flags=re.IGNORECASE)
+    return answer.strip()
 
 
 def validate_design_proposal(proposal, candidate_df, fallback_df, requested_count):

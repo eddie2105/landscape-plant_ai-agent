@@ -10,6 +10,7 @@ _generator = import_module(
     "\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.AI\u56de\u7b54.generator"
 )
 _charts = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u4ecb\u9762.charts")
+_streamlit_app = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u4ecb\u9762.streamlit_app")
 _scoring = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u63a8\u85a6.scoring")
 _normalizer = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u8cc7\u6599.normalizer")
 _filters = import_module("\u666f\u89c0\u690d\u7269AI\u7cfb\u7d71.\u67e5\u8a62.filters")
@@ -22,9 +23,11 @@ PLANTING_DESIGN_FRAMEWORK = _schema.PLANTING_DESIGN_FRAMEWORK
 apply_filters = _search.apply_filters
 build_ai_context = _context.build_ai_context
 build_seasonal_matrix = _charts.build_seasonal_matrix
+build_proposal_overview = _streamlit_app.build_proposal_overview
 extract_known_filters = _filters.extract_known_filters
 find_relaxed_candidates = _search.find_relaxed_candidates
 generate_grounded_answer = _generator.generate_grounded_answer
+generate_design_interpretation = _generator.generate_design_interpretation
 generate_design_proposal = _generator.generate_design_proposal
 invalid_answer_plant_ids = _generator.invalid_answer_plant_ids
 merge_ai_and_manual_filters = _filters.merge_ai_and_manual_filters
@@ -33,6 +36,7 @@ normalize_matrix_data = _normalizer.normalize_matrix_data
 normalize_multivalue_text = _normalizer.normalize_multivalue_text
 score_candidates = _scoring.score_candidates
 select_recommendations = _scoring.select_recommendations
+sort_proposal_overview = _streamlit_app.sort_proposal_overview
 validate_design_proposal = _generator.validate_design_proposal
 
 
@@ -88,7 +92,64 @@ class MatrixQueryTests(unittest.TestCase):
 
     def test_matrix_contains_flower_fruit_leaf_symbols(self):
         matrix = build_seasonal_matrix(self.df.head(1))
+        self.assertEqual("紫花灌木", matrix.loc[0, "植物"])
+        self.assertNotIn("001", matrix.loc[0, "植物"])
         self.assertEqual("花＋葉", matrix.loc[0, "3月"])
+
+    def test_proposal_overview_marks_theme_and_sorts_landscape_layers(self):
+        plants = pd.DataFrame([
+            {"plant_id": "low", "chinese_name": "低層植物", "plant_type": "草本", "flower_color": "", "fruit_color": "", "leaf_color": "綠", "needs_review": False},
+            {"plant_id": "other", "chinese_name": "藤本植物", "plant_type": "藤本", "flower_color": "", "fruit_color": "", "leaf_color": "綠", "needs_review": False},
+            {"plant_id": "high", "chinese_name": "主題喬木", "plant_type": "喬木", "flower_color": "紅", "fruit_color": "", "leaf_color": "綠", "needs_review": False},
+            {"plant_id": "middle", "chinese_name": "中層植物", "plant_type": "灌木", "flower_color": "白", "fruit_color": "", "leaf_color": "綠", "needs_review": False},
+        ])
+        roles = {
+            "low": {"layer": "低層", "role": "前景／收邊", "confidence": "high", "needs_review": False},
+            "other": {"layer": "其他型態", "role": "藤本候選", "confidence": "high", "needs_review": False},
+            "high": {"layer": "高層", "role": "主題植物／高層季節焦點候選", "confidence": "high", "needs_review": False},
+            "middle": {"layer": "中層", "role": "中層量體", "confidence": "high", "needs_review": False},
+        }
+
+        overview = sort_proposal_overview(build_proposal_overview(plants, roles))
+
+        self.assertEqual(["高層", "中層", "低層", "其他型態"], overview["固定層次"].tolist())
+        self.assertEqual("🌿 主題植物", overview.iloc[0]["植物定位"])
+
+    def test_design_interpretation_hides_internal_field_names(self):
+        class FakeResponse:
+            output_text = "## 設計解讀\nselection_evidence：花3月\ncollaboration: 與低層銜接\nplant_id: merged_001"
+
+        class FakeResponses:
+            def __init__(self):
+                self.kwargs = None
+
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return FakeResponse()
+
+        class FakeClient:
+            def __init__(self):
+                self.responses = FakeResponses()
+
+        client = FakeClient()
+        answer = generate_design_interpretation(
+            "山櫻花庭院",
+            {
+                "items": [{"chinese_name": "山櫻花", "layer": "高層", "role": "主題植物", "selection_evidence": "花3月", "collaboration": "與低層銜接"}],
+            },
+            "sk-test",
+            "gpt-test",
+            client=client,
+        )
+
+        self.assertNotIn("設計解讀", answer)
+        self.assertNotIn("selection_evidence", answer)
+        self.assertNotIn("collaboration", answer)
+        self.assertNotIn("plant_id", answer)
+        self.assertNotIn("merged_001", answer)
+        prompt_data = client.responses.kwargs["input"][1]["content"]
+        self.assertIn('"植物": "山櫻花"', prompt_data)
+        self.assertNotIn("plant_id", prompt_data)
 
     def test_score_penalizes_review_rows(self):
         result = score_candidates(self.df, {**DEFAULT_FILTERS, "months": [3], "ornamental_parts": ["花", "果"]})
