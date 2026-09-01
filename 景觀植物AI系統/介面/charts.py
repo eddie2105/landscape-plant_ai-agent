@@ -9,7 +9,7 @@ from ..查詢.schema import MONTH_FIELD_PREFIXES, MONTH_KEYS, MONTH_LABELS
 def build_seasonal_matrix(candidate_df):
     rows = []
     for _, row in candidate_df.iterrows():
-        matrix_row = {"植物": f"{as_text(row.get('chinese_name'))} ({as_text(row.get('plant_id'))})"}
+        matrix_row = {"植物": as_text(row.get("chinese_name"))}
         for number, key in enumerate(MONTH_KEYS, start=1):
             values = [part for part, prefix in MONTH_FIELD_PREFIXES.items() if normalize_boolean(row.get(f"{prefix}_{key}"))]
             matrix_row[MONTH_LABELS[number]] = "＋".join(values) if values else "-"
