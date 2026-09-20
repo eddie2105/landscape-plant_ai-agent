@@ -14,10 +14,11 @@ if not sys.path or sys.path[0] != str(PROJECT_ROOT):
         sys.path.remove(str(PROJECT_ROOT))
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from 景觀植物AI系統.AI回答.context import build_ai_context
+from 景觀植物AI系統.AI回答.context import build_ai_context, build_intent_ai_context
 from 景觀植物AI系統.AI回答.generator import (
     generate_design_interpretation,
     generate_grounded_answer,
+    generate_intent_design_interpretation,
     invalid_answer_plant_ids,
 )
 from 景觀植物AI系統.介面.charts import build_coverage_analysis, build_seasonal_matrix
@@ -33,6 +34,10 @@ from 景觀植物AI系統.查詢.filters import (
     new_default_filters,
 )
 from 景觀植物AI系統.查詢.search import apply_filters, find_relaxed_candidates
+from 景觀植物AI系統.查詢.intent import (
+    describe_design_intent, filter_by_design_intent, intent_month_coverage,
+    normalize_design_intent, parse_design_intent, select_intent_recommendations,
+)
 from 景觀植物AI系統.資料.matrix_loader import load_matrix as _load_matrix
 from 景觀植物AI系統.資料.normalizer import build_filter_options
 from 景觀植物AI系統.設定.settings import (
@@ -41,8 +46,8 @@ from 景觀植物AI系統.設定.settings import (
 )
 
 
-QUERY_LOGIC_VERSION = "2026-09-01-proposal-layout-v8"
-RESULT_LAYOUT_VERSION = "2026-09-01-layered-proposal-v2"
+QUERY_LOGIC_VERSION = "2026-09-20-controlled-intent-v2"
+RESULT_LAYOUT_VERSION = "2026-09-20-controlled-intent-v2"
 EXAMPLE_QUESTIONS = [
     "幫我規劃春天開粉紅花的庭院植栽。",
     "我想找秋天有果實的喬木，作為公園步道背景。",
@@ -167,6 +172,13 @@ def build_proposal_overview(df, roles):
                 "資料可確認的色彩": "；".join(color_evidence) or "色彩資料未提供",
                 "資料狀態": f"{role.get('confidence') or '未標示'}／{'需要人工複查' if role.get('needs_review') else '未標示需複查'}",
                 "與其他植栽的協作": role.get("collaboration", "系統尚未建立協作說明"),
+                "學名": row.get("scientific_name", "") or "未提供",
+                "生長型態": row.get("growth_form", "") or "未提供",
+                "用途標籤": row.get("use_tags", "") or "未提供",
+                "符合必要標籤": row.get("matched_required_tags", "") or "—",
+                "符合偏好標籤": row.get("matched_preferred_tags", "") or "—",
+                "指定月份季相證據": row.get("seasonal_evidence", "") or "未指定月份或資料未提供",
+                "原生狀態": row.get("native_status", "") or "待確認",
             }
         )
     return pd.DataFrame(rows)
@@ -200,6 +212,12 @@ def render_layered_proposal(overview):
                     st.markdown(f"**{item['植物']}**{theme_badge}")
                     st.caption(f"{item['型態']}｜{item['固定角色']}")
                     st.write(item["與其他植栽的協作"])
+                    st.caption(f"學名：{item.get('學名', '未提供')}｜生長型態：{item.get('生長型態', '未提供')}")
+                    st.write(f"**用途標籤：** {item.get('用途標籤', '未提供')}")
+                    st.write(f"**符合條件：** 必要 {item.get('符合必要標籤', '—')}｜偏好 {item.get('符合偏好標籤', '—')}")
+                    st.write(f"**季相證據：** {item.get('指定月份季相證據', '未指定月份或資料未提供')}")
+                    st.write(f"**色彩／原生性：** {item.get('資料可確認的色彩', '色彩資料未提供')}｜{item.get('原生狀態', '待確認')}")
+                    st.caption(f"資料品質：{item.get('資料狀態', '未標示')}")
 
 
 def describe_applied_filters(filters):
@@ -384,6 +402,133 @@ def render_quality_notes(result, selected):
         st.info("資料限制：" + result["data_limit"])
 
 
+def _merge_manual_intent(intent, manual):
+    merged = {**intent, "constraints": dict(intent["constraints"])}
+    for intent_key, manual_key in (("required_months", "months"), ("flower_colors", "flower_colors"), ("plant_types", "plant_types")):
+        if manual.get(manual_key):
+            merged[intent_key] = list(dict.fromkeys(merged.get(intent_key, []) + manual[manual_key]))
+    return normalize_design_intent(merged)
+
+
+def _intent_display_layer(row):
+    """Presentation only: never changes the selected plant set."""
+    text = f"{row.get('plant_type', '')} {row.get('growth_form', '')}"
+    if "藤" in text:
+        return "其他型態"
+    if "喬木" in text or "小喬木" in text:
+        return "高層"
+    if "灌木" in text:
+        return "中層"
+    if any(word in text for word in ("草本", "地被", "香草", "蕨類")):
+        return "低層"
+    return "依型態待確認"
+
+
+def build_intent_display_roles(selected, intent):
+    """Create traceable display roles from selected rows, without layer quotas."""
+    roles = {}
+    layer_names = {"高層": "骨架／背景候選", "中層": "中層量體候選", "低層": "前景／收邊候選", "其他型態": "垂直或特殊位置候選"}
+    for _, row in selected.iterrows():
+        layer = _intent_display_layer(row)
+        is_theme = bool(str(row.get("matched_theme_concept", "") or ""))
+        role = "主題植物／季節焦點候選" if is_theme else layer_names.get(layer, "型態待確認候選")
+        evidence = str(row.get("seasonal_evidence", "") or "") or "資料表未指定本次月份的季相紀錄"
+        roles[str(row["plant_id"])] = {
+            "layer": layer,
+            "role": role,
+            "selection_evidence": evidence,
+            "confidence": str(row.get("confidence", "") or "未標示"),
+            "needs_review": bool(row.get("needs_review", False)),
+            "collaboration": "依已選入植物的型態建立視覺層次；實際位置、株距與量體仍需依基地條件確認。",
+            "rationale": "由程式依資料表型態與本次命中證據建立，未新增植物。",
+        }
+    return roles
+
+
+def build_intent_design_summary(selected, roles, intent):
+    counts = {}
+    for role in roles.values():
+        counts[role["layer"]] = counts.get(role["layer"], 0) + 1
+    layer_text = "、".join(f"{layer}{count}種" for layer, count in counts.items()) or "目前未能判定層次"
+    theme_count = sum("主題植物" in role["role"] for role in roles.values())
+    season_text = "、".join(f"{month}月" for month in intent.get("required_months", [])) or "資料表可確認的季相"
+    lines = [
+        f"本案以 {season_text} 的條件篩選出 {len(selected)} 種植物；目前可辨識的展示層次為 {layer_text}。",
+        f"主題焦點候選共 {theme_count} 種，其餘植物依型態形成可供後續配置討論的背景、量體或前景候選。",
+        "配置時應以重複、群植或帶狀方式建立節奏；實際位置、株距、日照、排水與維護條件仍須現地確認。",
+    ]
+    if "藥用" in intent.get("required_tags", []):
+        lines.append("藥用標籤為傳統用途資料，非醫療建議。")
+    return "\n\n".join(lines)
+
+
+def run_intent_query(question, matrix_df, settings, manual):
+    try:
+        intent = parse_design_intent(question, settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
+    except Exception:
+        intent = normalize_design_intent({}, question)
+    intent = _merge_manual_intent(intent, manual)
+    filtered = filter_by_design_intent(matrix_df, intent)
+    selected = select_intent_recommendations(filtered["candidates"], intent, manual.get("requested_count", 8))
+    roles = build_intent_display_roles(selected, intent)
+    answer = build_intent_design_summary(selected, roles, intent) if not selected.empty else ""
+    if not selected.empty and settings.get("OPENAI_API_KEY"):
+        try:
+            ai_answer = generate_intent_design_interpretation(question, build_intent_ai_context(selected, intent), settings["OPENAI_API_KEY"], settings["OPENAI_MODEL"])
+            if ai_answer:
+                answer += "\n\n" + ai_answer
+        except Exception:
+            pass
+    return {"query_mode": "controlled_intent", "question": question.strip(), "intent": intent, "candidates": filtered["candidates"], "selected": selected, "answer": answer, "roles": roles, "unavailable_conditions": filtered["unavailable_conditions"], "data_shortage": filtered["data_shortage"], "month_coverage": intent_month_coverage(selected, intent)}
+
+
+def render_intent_results(result):
+    """New strict filtering with the established charts, matrix and cards."""
+    intent, candidates, selected = result["intent"], result["candidates"], result["selected"]
+    st.header("植栽建議與景觀提案")
+    st.subheader("需求解析與實際篩選")
+    st.markdown(f"**使用者需求：** {result['question']}")
+    st.dataframe(pd.DataFrame([describe_design_intent(intent)]), hide_index=True, use_container_width=True)
+    applied = []
+    if intent["required_tags"]: applied.append("必要用途標籤（全部符合）：「" + "、".join(intent["required_tags"]) + "」")
+    if intent["preferred_tags"]: applied.append("偏好用途標籤（僅排序加分）：「" + "、".join(intent["preferred_tags"]) + "」")
+    if intent["native_only"]: applied.append("原生性：僅 native_status = 台灣原生")
+    if intent["required_months"]: applied.append("季相證據：" + "、".join(f"{month}月" for month in intent["required_months"]))
+    if intent["theme_concepts"]: applied.append("主題條件：" + "、".join(intent["theme_concepts"]))
+    st.caption("；".join(applied) or "未套用額外硬性條件。")
+    for message in result["unavailable_conditions"]: st.warning(message)
+    if "藥用" in intent["required_tags"]: st.info("傳統用途資料，非醫療建議。")
+    if result["data_shortage"]:
+        st.error(result["data_shortage"]); return
+    coverage = result["month_coverage"]
+    if intent["required_months"]:
+        covered = "、".join(f"{month}月" for month in coverage["covered_months"]) or "無"
+        missing = "、".join(f"{month}月" for month in coverage["uncovered_months"]) or "無"
+        (st.success if not coverage["uncovered_months"] else st.warning)(f"本次選入植物可確認的指定月份季相：{covered}；尚未覆蓋：{missing}。")
+    st.metric("符合條件候選", len(candidates))
+    if result["answer"]:
+        st.subheader("設計解讀"); st.caption("AI 僅依系統已選入植物的證據整理。植物事實以下方表格為準。"); st.markdown(result["answer"])
+    st.subheader("本次搭配植栽")
+    overview = sort_proposal_overview(build_proposal_overview(selected, result.get("roles") or {}))
+    if overview.empty:
+        st.info("目前沒有可建立展示角色的植物資料。")
+    else:
+        st.caption("依高層、中層、低層、其他型態排序；此為依資料表型態建立的展示角色，不代表實際株高或施工配置。")
+        render_layered_proposal(overview)
+        with st.expander("查看本次搭配植栽的角色與資料依據", expanded=False):
+            st.dataframe(overview, hide_index=True, use_container_width=True)
+    st.subheader("本次搭配植物清單")
+    fields = [("chinese_name", "植物"), ("scientific_name", "學名"), ("plant_type", "植物型態"), ("growth_form", "生長型態"), ("use_tags", "資料用途標籤"), ("matched_required_tags", "符合必要標籤"), ("matched_preferred_tags", "符合偏好標籤"), ("seasonal_evidence", "指定月份季相證據"), ("native_status", "原生狀態"), ("needs_review", "需要人工複查")]
+    def display_table(frame):
+        return frame[[key for key, _ in fields if key in frame]].rename(columns=dict(fields))
+    st.dataframe(display_table(selected), hide_index=True, use_container_width=True)
+    with st.expander(f"查看全部 {len(candidates)} 種符合條件候選植物"):
+        st.dataframe(display_table(candidates), hide_index=True, use_container_width=True)
+    if not selected.empty:
+        chart_data = build_coverage_analysis(selected, requested_months=intent["required_months"], requested_parts=["花", "果", "葉"])
+        render_seasonal_evidence(selected, chart_data)
+
+
 def render_results(result):
     candidates = result["candidates"]
     selected = result["selected"]
@@ -499,9 +644,18 @@ def render_app():
             cached = st.session_state.get("matrix_result")
             if cached and cached.get("cache_key") == cache_key:
                 st.info("已顯示相同問題與篩選條件的既有結果。")
-                render_results(cached)
+                if cached.get("query_mode") == "controlled_intent":
+                    render_intent_results(cached)
+                else:
+                    render_results(cached)
                 return
             settings = load_matrix_settings()
+            with st.spinner("正在解析需求並依資料表篩選植物…"):
+                controlled_result = run_intent_query(question, matrix_df, settings, manual_filters)
+            controlled_result["cache_key"] = cache_key
+            st.session_state["matrix_result"] = controlled_result
+            render_intent_results(controlled_result)
+            return
             options = build_filter_options(matrix_df)
             known_filters = extract_known_filters(question, options)
             try:
@@ -633,7 +787,11 @@ def render_app():
                     st.info("AI 回答暫時不可用，已顯示可追溯的篩選結果。")
             st.session_state["matrix_result"] = {"cache_key": cache_key, "question": question.strip(), "total": len(matrix_df), "filters": applied, "candidates": candidates, "selected": selected, "answer": answer, "roles": roles, "data_limit": data_limit, "has_composition": has_composition and not hard_filter_no_match, "composition": composition, "approximation_note": approximation_note, "hard_filter_no_match": hard_filter_no_match, "ai_keyword_interpretation": ai_keyword_interpretation, "keyword_suggestion": keyword_suggestion}
     if "matrix_result" in st.session_state:
-        render_results(st.session_state["matrix_result"])
+        result = st.session_state["matrix_result"]
+        if result.get("query_mode") == "controlled_intent":
+            render_intent_results(result)
+        else:
+            render_results(result)
 
 
 if __name__ == "__main__":

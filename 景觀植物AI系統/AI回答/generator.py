@@ -64,6 +64,17 @@ def generate_grounded_answer(question, applied_filters, candidate_context, api_k
     return as_text(response.output_text)
 
 
+def generate_intent_design_interpretation(question, intent_context, api_key, model, client=None):
+    """AI writes only a narrative after Python has selected all plants."""
+    prompt = """只根據提供 JSON 以繁體中文寫簡短景觀設計解讀。不得輸出或猜測植物名稱、學名、plant_id、未提供的植物事實、日照、水分、尺寸或適地性。不得新增、替換或推薦植物。植物名稱、標籤、月份證據與資料品質由系統表格顯示。"""
+    response = (client or OpenAI(api_key=api_key)).responses.create(
+        model=model,
+        input=[{"role": "system", "content": prompt}, {"role": "user", "content": f"需求：{question}\n已選定證據：{intent_context}"}],
+        timeout=35,
+    )
+    return as_text(response.output_text)
+
+
 def generate_design_proposal(question, applied_filters, candidate_context, api_key, model, composition=None, client=None):
     # ``selected`` is a DataFrame used by the UI and cannot be JSON-encoded for
     # the Responses API.  The model only needs the locked design metadata; its
@@ -222,6 +233,7 @@ __all__ = [
     "PLANTING_DESIGN_FRAMEWORK",
     "generate_design_proposal",
     "generate_design_interpretation",
+    "generate_intent_design_interpretation",
     "generate_grounded_answer",
     "answer_uses_exact_composition",
     "invalid_answer_plant_ids",
