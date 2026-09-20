@@ -24,7 +24,7 @@ def build_ai_context(candidate_df, filters, max_rows=20):
 
 def build_intent_ai_context(selected_df, intent, max_rows=20):
     """Bounded evidence for narrative-only AI output; no names or IDs."""
-    fields = ("plant_type", "growth_form", "matched_required_tags", "matched_preferred_tags", "seasonal_evidence", "native_status", "needs_review", "matched_theme_concept")
+    fields = ("plant_type", "growth_form", "matched_required_tags", "matched_preferred_tags", "seasonal_evidence", "native_status", "needs_review", "matched_theme_concept", "requested_roles")
     rows = [{field: as_text(row.get(field)) for field in fields} for _, row in selected_df.head(max_rows).iterrows()]
     return json.dumps({"intent": intent, "selected_plant_evidence": rows}, ensure_ascii=False)
 

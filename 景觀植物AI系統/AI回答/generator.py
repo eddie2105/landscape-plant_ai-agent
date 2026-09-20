@@ -66,7 +66,7 @@ def generate_grounded_answer(question, applied_filters, candidate_context, api_k
 
 def generate_intent_design_interpretation(question, intent_context, api_key, model, client=None):
     """AI writes only a narrative after Python has selected all plants."""
-    prompt = """只根據提供 JSON 以繁體中文寫簡短景觀設計解讀。不得輸出或猜測植物名稱、學名、plant_id、未提供的植物事實、日照、水分、尺寸或適地性。不得新增、替換或推薦植物。植物名稱、標籤、月份證據與資料品質由系統表格顯示。"""
+    prompt = """只根據提供 JSON 以繁體中文寫簡短景觀設計解讀。不得輸出或猜測植物名稱、學名、plant_id、未提供的植物事實、日照、水分、尺寸或適地性。不得新增、替換或推薦植物。若 JSON 有 requested_roles，僅可依該角色說明不同候選方向，不能把兩個方向混為同一方案。植物名稱、標籤、月份證據與資料品質由系統表格顯示。"""
     response = (client or OpenAI(api_key=api_key)).responses.create(
         model=model,
         input=[{"role": "system", "content": prompt}, {"role": "user", "content": f"需求：{question}\n已選定證據：{intent_context}"}],

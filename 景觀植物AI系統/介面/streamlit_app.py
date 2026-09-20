@@ -49,10 +49,10 @@ from 景觀植物AI系統.設定.settings import (
 QUERY_LOGIC_VERSION = "2026-09-20-controlled-intent-v2"
 RESULT_LAYOUT_VERSION = "2026-09-20-controlled-intent-v2"
 EXAMPLE_QUESTIONS = [
-    "幫我規劃春天開粉紅花的庭院植栽。",
-    "我想找秋天有果實的喬木，作為公園步道背景。",
-    "幫我找四季都有花、果、葉變化的庭院植物。",
-    "幫我規劃夏天有變化、春天有櫻花的庭院。",
+    "幫我規劃春季粉紅花庭院：高層、中層與前景植物怎麼搭配？",
+    "請找台灣原生、可吸引蝴蝶的植物，規劃一座小型生態花園。",
+    "幫我規劃香草與芳香入口庭院，並搭配一棵視覺焦點喬木。",
+    "請找夏季花、果、葉有變化的植物，作為公園步道的景觀配置。",
 ]
 
 LAYER_SECTIONS = (
@@ -431,7 +431,9 @@ def build_intent_display_roles(selected, intent):
     for _, row in selected.iterrows():
         layer = _intent_display_layer(row)
         is_theme = bool(str(row.get("matched_theme_concept", "") or ""))
-        role = "主題植物／季節焦點候選" if is_theme else layer_names.get(layer, "型態待確認候選")
+        requested = [item for item in str(row.get("requested_roles", "") or "").split("、") if item]
+        requested_labels = {item.get("key"): item.get("label") for item in intent.get("role_requests", [])}
+        role = "、".join(requested_labels.get(item, item) for item in requested) or ("主題植物／季節焦點候選" if is_theme else layer_names.get(layer, "型態待確認候選"))
         evidence = str(row.get("seasonal_evidence", "") or "") or "資料表未指定本次月份的季相紀錄"
         roles[str(row["plant_id"])] = {
             "layer": layer,
@@ -495,6 +497,8 @@ def render_intent_results(result):
     if intent["native_only"]: applied.append("原生性：僅 native_status = 台灣原生")
     if intent["required_months"]: applied.append("季相證據：" + "、".join(f"{month}月" for month in intent["required_months"]))
     if intent["theme_concepts"]: applied.append("主題條件：" + "、".join(intent["theme_concepts"]))
+    if intent.get("role_requests"):
+        applied.append("分角色候選池：" + "；".join(item["label"] for item in intent["role_requests"]))
     st.caption("；".join(applied) or "未套用額外硬性條件。")
     for message in result["unavailable_conditions"]: st.warning(message)
     if "藥用" in intent["required_tags"]: st.info("傳統用途資料，非醫療建議。")
@@ -611,7 +615,8 @@ def render_app():
         st.error(str(exc)); return
     manual_filters = render_filters(build_filter_options(matrix_df))
     st.caption(f"資料來源：{source}　｜　植物資料 {len(matrix_df)} 筆　｜　待人工複查 {int(matrix_df['needs_review'].sum())} 筆")
-    st.markdown("#### 從範例需求開始")
+    st.markdown("#### 用自然語言規劃你的景觀植栽")
+    st.caption("依季節、花果葉、用途、原生性與植物型態，從資料庫篩選可追溯的植物，再整理成景觀配置方向。")
     example_columns = st.columns(2)
     for index, example in enumerate(EXAMPLE_QUESTIONS):
         with example_columns[index % 2]:
